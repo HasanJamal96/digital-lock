@@ -44,7 +44,7 @@ class Memory {
           }
           else {
             #if(DEBUG == true && DEBUG_MEMORY == true)
-              Serial.println("[SPIFFS] Unable to load users info.");
+              Serial.println("[SPIFFS] Users loaded.");
             #endif
           }
         }
@@ -65,9 +65,11 @@ class Memory {
           Serial.println("[SPIFFS] Users updated.");
         #endif
       }
-      #if(DEBUG == true && DEBUG_MEMORY == true)
-        Serial.println("[SPIFFS] Users failed to updated.");
-      #endif
+      else {
+        #if(DEBUG == true && DEBUG_MEMORY == true)
+          Serial.println("[SPIFFS] Users failed to updated.");
+        #endif
+      }
     }
     
     void resetUsers() {
@@ -112,7 +114,7 @@ class Memory {
     
     void setDefaultsSettings() {
       #if(DEBUG == true && DEBUG_MEMORY == true)
-        Serial.println("[SPIFFS] Saving default settings.");
+        Serial.println("[SPIFFS] Resettings default settings.");
       #endif
       systemInfo.clear();
       systemInfo["dn"] = DEVICE_NAME;
@@ -121,6 +123,14 @@ class Memory {
       systemInfo["cl"] = CODE_LENGTH;
       systemInfo["lo"] = LOCKOUT;
       systemInfo["sm"] = SLEEP_MODE;
+      systemInfo["ac"] = PROG_PASSWORD;
+      updateSystemInfo();
+    }
+    
+    void resetProgramAccess() {
+      #if(DEBUG == true && DEBUG_MEMORY == true)
+        Serial.println("[SPIFFS] Resettings default Program access code.");
+      #endif
       systemInfo["ac"] = PROG_PASSWORD;
       updateSystemInfo();
     }

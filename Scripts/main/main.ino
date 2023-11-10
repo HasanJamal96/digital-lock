@@ -4,6 +4,7 @@
       - Delete user
       - Add user
       - Edit user
+      - Saving data in SPIFFS
   
   # Partially Completed
     - Webserver
@@ -228,10 +229,13 @@ void watchKeypad() {
               }
               else if(deviceState == RESET_PASSWORD) {
                 // Reset program password
+                resetProgramAccess();
                 buzzer.threeShortBeeps();
               }
               else if(deviceState == RESET_ALL) {
                 // Reset everything 
+                resetUsers();
+                setDefaultsSettings();
                 buzzer.threeShortBeeps();
               }
               else if(deviceState == WAIT_PROGRAMING_CODE) {
@@ -346,7 +350,7 @@ void watchKeypad() {
                       memory.updateUsers();
                       #if (DEBUG == true)
                         Serial.println("[Main] User added");
-                        serializeJson(usersInfo, Serial);
+                        serializeJsonPretty(usersInfo, Serial);
                         Serial.println();
                       #endif
                       addUser = editUser = deleteUser = false;
@@ -359,7 +363,7 @@ void watchKeypad() {
                       memory.updateUsers();
                       #if (DEBUG == true)
                         Serial.printf("User Edited with id %d\n", userId);
-                        serializeJson(usersInfo, Serial);
+                        serializeJsonPretty(usersInfo, Serial);
                         Serial.println();
                       #endif
                       addUser = editUser = deleteUser = false;
@@ -372,7 +376,7 @@ void watchKeypad() {
                       memory.updateUsers();
                       #if (DEBUG == true)
                         Serial.printf("User deleted with id %d\n", userId);
-                        serializeJson(usersInfo, Serial);
+                        serializeJsonPretty(usersInfo, Serial);
                         Serial.println();
                       #endif
                       addUser = editUser = deleteUser = false;
@@ -402,13 +406,13 @@ void watchKeypad() {
 
 
 void populateSystemInfo() {
-  const char *dn = systemInfo["dn"];
-  const char *wn = systemInfo["wn"];
-  const char *wp = systemInfo["wp"];
+  const char    *dn = systemInfo["dn"];
+  const char    *wn = systemInfo["wn"];
+  const char    *wp = systemInfo["wp"];
   const uint8_t  cl = systemInfo["cl"];
-  const bool lo = systemInfo["lo"];
-  const bool sm = systemInfo["sm"];
-  const char *ac = systemInfo["ac"];
+  const bool     lo = systemInfo["lo"];
+  const bool     sm = systemInfo["sm"];
+  const char    *ac = systemInfo["ac"];
   
   strcpy(deviceName, dn);
   strcpy(apName, wn);

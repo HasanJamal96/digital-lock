@@ -1,5 +1,5 @@
 const uint16_t MAX_SUPPORTED_USERS = 1000;
-
+const uint16_t MODE_RESET_BACK_TO_NORMAL_AFTER = 240000; // time in milli seconds
 
 
 typedef enum : uint8_t {
@@ -31,12 +31,18 @@ bool functionConfirmed = false;
 uint8_t selectedFunction = 0;
 int userId = -1;
 
-
-const uint8_t RELAY_PIN		     = 2;
+/*
+  SPI Pins - Ethernet shield
+  5, 18, 19, 23
+  
+  I2C Pins
+  21, 22
+*/
+const uint8_t RELAY_PIN		     = 27;
 const uint8_t BUZZER_PIN       = 4;
 const uint8_t RESET_BTN_PIN    = 32;
-const uint8_t RELAY_LED_PIN    = 25;
-const uint8_t EXIT_LED_PIN     = 26;
+const uint8_t RELAY_LED_PIN    = 26;
+const uint8_t EXIT_LED_PIN     = 25;
 
 
 // keypad
@@ -55,8 +61,9 @@ char keys[ROWS][COLS] = {
 };
 
 
-bool          backLightState = true;
-const uint8_t BACKLIGHT_LED_LIN = 27;
+bool           backLightState = true;
+const uint8_t  BACKLIGHT_LED_LIN = 27;
+const uint16_t BACKLIGHT_OFF_AFTER = 30000; // time in milli seconds
 
 
 bool enterState  = false;
@@ -84,7 +91,10 @@ char deviceName[20];
 char apName[20];
 char apPass[20];
 
-
+bool addByServer    = false;
+bool editByServer   = false;
+bool deleteByServer = false;
+bool systemByServer = false;
 
 // User codes
 uint16_t registeredUsersCount = 0;

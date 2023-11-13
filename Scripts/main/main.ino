@@ -143,6 +143,36 @@ void setDefaultNewUser() {
 
 
 
+void populateSystemInfo() {
+  const char    *dn = systemInfo["dn"];
+  const char    *wn = systemInfo["wn"];
+  const char    *wp = systemInfo["wp"];
+  const uint8_t  cl = systemInfo["cl"];
+  const bool     lo = systemInfo["lo"];
+  const bool     sm = systemInfo["sm"];
+  const char    *ac = systemInfo["ac"];
+  
+  strcpy(deviceName, dn);
+  strcpy(apName, wn);
+  strcpy(apPass, wp);
+  maxPasscodeLength = cl;
+  lockOut = lo;
+  sleepMode = sm;
+  strcpy(programAccessCode, ac);
+}
+
+
+void turnBacklight(bool on) {
+  if(on) {
+    backLightState = true;
+  }
+  else {
+    backLightState = false;
+  }
+}
+
+
+
 void watchKeypad() {
   if (keypad.getKeys()) {
     for(uint8_t i=0; i<LIST_MAX; i++) {
@@ -153,7 +183,7 @@ void watchKeypad() {
             buzzer.shortBeep();
             lastKeyPressed = millis();
             if(!backLightState) {
-              // turn on Backlight
+              turnBacklight(true);
             }
             if(k > 47 && k < 58) {
               if(deviceState != PROGRAMING) {
@@ -224,19 +254,42 @@ void watchKeypad() {
                 #endif
                 int id = matchUsers(passcode);
                 if(id != -1) {
-                  // Run relay function
+                  const uint8_t rFunc = usersInfo[id]["f"];
+                  switch(rFunc) { // check relay functions
+                    case 1: // Momentary
+                      uint16_t ot;
+                      ot = usersInfo[id]["o"].as<uint16_t>();
+                      relay.momentaryOnFor(ot);
+                      break;
+                    case 2: // Latch
+                      relay.on();
+                      break;
+                    case 3: // Unlatch
+                      relay.off();
+                      break;
+                    case 4: // Toggle
+                      relay.toggle();
+                      break;
+                    default:
+                      break;
+                  }
                 }
               }
               else if(deviceState == RESET_PASSWORD) {
-                // Reset program password
-                resetProgramAccess();
+                memory.resetProgramAccess();
                 buzzer.threeShortBeeps();
+                #if (DEBUG == true)
+                  Serial.printf("[Main] Reset program access code to 000000");
+                #endif
               }
               else if(deviceState == RESET_ALL) {
-                // Reset everything 
-                resetUsers();
-                setDefaultsSettings();
+                memory.resetUsers();
+                memory.setDefaultsSettings();
                 buzzer.threeShortBeeps();
+                populateSystemInfo();
+                #if (DEBUG == true)
+                  Serial.printf("[Main] Reset everything to default");
+                #endif
               }
               else if(deviceState == WAIT_PROGRAMING_CODE) {
                 if(passcodeIndex == PROGRAM_ACCESS_CODE_LEN) {
@@ -405,25 +458,6 @@ void watchKeypad() {
 }
 
 
-void populateSystemInfo() {
-  const char    *dn = systemInfo["dn"];
-  const char    *wn = systemInfo["wn"];
-  const char    *wp = systemInfo["wp"];
-  const uint8_t  cl = systemInfo["cl"];
-  const bool     lo = systemInfo["lo"];
-  const bool     sm = systemInfo["sm"];
-  const char    *ac = systemInfo["ac"];
-  
-  strcpy(deviceName, dn);
-  strcpy(apName, wn);
-  strcpy(apPass, wp);
-  maxPasscodeLength = cl;
-  lockOut = lo;
-  sleepMode = sm;
-  strcpy(programAccessCode, ac);
-}
-
-
 void setup() {
   #if (DEBUG == true)
     Serial.begin(BAUDRATE);
@@ -431,8 +465,8 @@ void setup() {
   #endif
   
   
-  deviceState = WAIT_PROGRAMING_CODE;
-  currentPassLength = PROGRAM_ACCESS_CODE_LEN;
+  // deviceState = WAIT_PROGRAMING_CODE;
+  // currentPassLength = PROGRAM_ACCESS_CODE_LEN;
   
   buzzer.init();
   relay.begin();
@@ -442,16 +476,11 @@ void setup() {
   memory.loadUsers();
   populateSystemInfo();
   
+  registeredUsersCount = usersInfo.size();
   
-  
-  
-  // newUser["p"] = "1234";
-  // usersInfo.add(newUser);
-  // newUser["p"] = "2486";
-  // usersInfo.add(newUser);
-  // registeredUsersCount = 2;
-  
-  // memory.updateUsers();
+  // Server init
+  initServer();
+  startServer();
   
   
   #if (DEBUG == true)
@@ -496,14 +525,13 @@ void deviceModeLoop() {
 
 void timedParameters() {
   if(deviceState != NORMAL) {
-    if(millis() - deviceStateChangeAt >= 240000) {
+    if(millis() - deviceStateChangeAt >= MODE_RESET_BACK_TO_NORMAL_AFTER) {
       changeModeToNormal();
     }
   }
   if(sleepMode && backLightState) {
-    if(millis() - lastKeyPressed >= 30) {
-       // turn off backlight
-       backLightState = false;
+    if(millis() - lastKeyPressed >= BACKLIGHT_OFF_AFTER) {
+       turnBacklight(false);
     }
   }
   resetButton.read();
@@ -520,6 +548,59 @@ void timedParameters() {
 }
 
 
+bool updatesByServer() {
+  if(addByServer) {
+    addByServer = false;
+    usersInfo.add(newUser);
+    registeredUsersCount++;
+    buzzer.threeShortBeeps();
+    memory.updateUsers();
+    return true;
+  }
+  else if(editByServer) {
+    editByServer = false;
+    char p[20];
+    strcpy(p, newUser["p"]);
+    int x = userExist(p);
+    if(x != -1) {
+      usersInfo[x]["n"] = newUser["n"];
+      usersInfo[x]["f"] = newUser["f"];
+      usersInfo[x]["p"] = newUser["p"];
+      usersInfo[x]["u"] = newUser["u"];
+      usersInfo[x]["o"] = newUser["o"];
+      buzzer.threeShortBeeps();
+      memory.updateUsers();
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+  else if(deleteByServer) {
+    deleteByServer = false;
+    char p[20];
+    strcpy(p, newUser["p"]);
+    int x = userExist(p);
+    if(x != -1) {
+      registeredUsersCount--;
+      usersInfo.remove(x);
+      memory.updateUsers();
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+  else if(systemByServer) {
+    systemByServer = false;
+    memory.updateSystemInfo();
+    populateSystemInfo();
+    return true;
+  }
+  return false;
+}
+
+
 
 
 void loop() {
@@ -527,4 +608,7 @@ void loop() {
   deviceModeLoop();
   websocketLoop();
   timedParameters();
+  if(relay.status()) {
+    relay.loop();
+  }
 }

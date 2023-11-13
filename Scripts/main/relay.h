@@ -24,15 +24,46 @@ class Relay {
       digitalWrite(_relayPin, RELAY_OFF);
       digitalWrite(_ledPin, LED_OFF);
       state = false;
+      _momentary = false;
+    }
+    
+    
+    void momentaryOnFor(uint32_t ms) {
+      _momentary = true;
+      _onTime = ms;
+      _onAt = millis();
+      on();
+    }
+    
+    
+    void toggle() {
+      _momentary = false;
+      if(state) {
+        off();
+      }
+      else {
+        on();
+      }
     }
     
     bool status() {
       return state;
+    }
+    
+    void loop() {
+      if(_momentary) {
+        if(millis() - _onAt >= _onTime) {
+          off();
+        }
+      }
     }
   
   
   private:
     uint8_t _relayPin;
     uint8_t _ledPin;
+    uint32_t _onTime = 0;
+    unsigned long _onAt = 0;
+    bool _momentary = false;
     bool state = false;
 };

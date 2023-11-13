@@ -11,6 +11,8 @@ AsyncWebSocket ws("/ws");
 
 
 void routes();
+bool updatesByServer();
+
 void websocketLoop() {
   ws.cleanupClients();
 }
@@ -141,6 +143,82 @@ void initServer() {
 void routes() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send_P(200, "text/html", "");
+  });
+  server.on("/get-users", HTTP_GET, [](AsyncWebServerRequest *request) {
+    #if (DEBUG == true && DEBUG_SERVER == true)
+      Serial.println("[Server] Sending users ");
+    #endif
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    serializeJson(usersInfo, *response);
+    request->send(response);
+  });
+  server.on("/get-system-info", HTTP_GET, [](AsyncWebServerRequest *request) {
+    #if (DEBUG == true && DEBUG_SERVER == true)
+      Serial.println("[Server] Sending system info ");
+    #endif
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    serializeJson(systemInfo, *response);
+    request->send(response);
+  });
+  server.on("/update-system-info",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total){
+    String rec = "";
+    for(int i=0; i<len; i++)
+      rec += (char)data[i];
+    DeserializationError error = deserializeJson(systemInfo, rec);
+    if(error) {
+      request->send(400, "text/plain", "{\"success\":\"0\",\"error\":\"unable to parse json\"}}");
+      return;
+    }
+    systemByServer = true;
+    if(updatesByServer())
+      request->send(200, "text/plain", "{\"success\":\"1\"}}");
+    else
+      request->send(200, "text/plain", "{\"success\":\"0\",\"error\":\"unable to update system info\"}}");
+  });
+  server.on("/new-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total){
+    String rec = "";
+    for(int i=0; i<len; i++)
+      rec += (char)data[i];
+    DeserializationError error = deserializeJson(newUser, rec);
+    if(error) {
+      request->send(400, "text/plain", "{\"success\":\"0\",\"error\":\"unable to parse json\"}}");
+      return;
+    }
+    addByServer = true;
+    if(updatesByServer())
+      request->send(200, "text/plain", "{\"success\":\"1\"}}");
+    else
+      request->send(200, "text/plain", "{\"success\":\"0\",\"error\":\"unable to add new user\"}}");
+  });
+  server.on("/delete-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total){
+    String rec = "";
+    for(int i=0; i<len; i++)
+      rec += (char)data[i];
+    DeserializationError error = deserializeJson(newUser, rec);
+    if(error) {
+      request->send(400, "text/plain", "{\"success\":\"0\",\"error\":\"unable to parse json\"}}");
+      return;
+    }
+    deleteByServer = false;
+    if(updatesByServer())
+      request->send(200, "text/plain", "{\"success\":\"1\"}}");
+    else
+      request->send(200, "text/plain", "{\"success\":\"0\",\"error\":\"user not found\"}}");
+  });
+  server.on("/update-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total){
+    String rec = "";
+    for(int i=0; i<len; i++)
+      rec += (char)data[i];
+    DeserializationError error = deserializeJson(newUser, rec);
+    if(error) {
+      request->send(400, "text/plain", "{\"success\":\"0\",\"error\":\"unable to parse json\"}}");
+      return;
+    }
+    editByServer = true;
+    if(updatesByServer())
+      request->send(200, "text/plain", "{\"success\":\"1\"}}");
+    else
+      request->send(200, "text/plain", "{\"success\":\"0\",\"error\":\"user not found\"}}");
   });
 }
 

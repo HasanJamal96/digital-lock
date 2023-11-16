@@ -1,5 +1,5 @@
 const uint16_t MAX_SUPPORTED_USERS = 1000;
-const uint16_t MODE_RESET_BACK_TO_NORMAL_AFTER = 240000; // time in milli seconds
+const uint32_t MODE_RESET_BACK_TO_NORMAL_AFTER = 240000; // time in milli seconds
 
 
 typedef enum : uint8_t {
@@ -43,6 +43,7 @@ const uint8_t BUZZER_PIN       = 4;
 const uint8_t RESET_BTN_PIN    = 32;
 const uint8_t RELAY_LED_PIN    = 26;
 const uint8_t EXIT_LED_PIN     = 25;
+const uint8_t KEYPAD_LED_PIN   = 33;
 
 
 // keypad

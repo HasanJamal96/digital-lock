@@ -1,3 +1,10 @@
+/*
+  0 -> DL100
+  1 -> DL1500
+
+*/
+#define LOCK_TYPE 1
+
 #define DEBUG     		true
 #define DEBUG_MEMORY  true
 #define DEBUG_SERVER  true

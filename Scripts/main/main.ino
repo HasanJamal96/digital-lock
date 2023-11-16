@@ -27,7 +27,7 @@
 
 DynamicJsonDocument usersInfo(4096);
 DynamicJsonDocument systemInfo(1024);
-DynamicJsonDocument newUser(100);
+DynamicJsonDocument newUser(256);
 
 
 #include "config.h"
@@ -39,7 +39,9 @@ DynamicJsonDocument newUser(100);
 #include "memory.h"
 #include "button.h"
 #include "server.h"
-
+#if (LOCK_TYPE == 1)
+#include "schedule.h"
+#endif
 
 device_state_t      deviceState = NORMAL;
 programing_step_t   programStep = NONE;
@@ -50,6 +52,7 @@ Memory memory;
 Buzzer buzzer      (BUZZER_PIN);
 Led    exitLed     (EXIT_LED_PIN);
 Relay  relay       (RELAY_PIN, RELAY_LED_PIN);
+Led    keypadLed   (KEYPAD_LED_PIN);
 Button resetButton (RESET_BTN_PIN);
 Keypad keypad      (makeKeymap(keys), KEYPAD_R_PINS, KEYPAD_C_PINS, ROWS, COLS);
 
@@ -114,6 +117,11 @@ void matchAdminPasscode() {
 }
 
 
+void removeUser(int id) {
+  usersInfo.remove(userId);
+  buzzer.threeShortBeeps();
+}
+
 
 
 void emptyPassCode() {
@@ -133,12 +141,26 @@ void populatePasscode(char k) {
   passcodeIndex++;
 }
 
+/*
+  {
+    "n": "user's name 19 characters max", -> string
+    "p": "user's password 19 characters max", -> string
+    "l": "limited use", -> bool
+    "f": "Relay function", -> uint8_t
+    "o": "Momentary on time in milli seconds ", -> uint32_t
+    "a": "number of times code used", -> uint16_t
+    "ma" :"maximum number of time allowed to use code", -> uin16_t
+  }
+*/
+
 void setDefaultNewUser() {
   newUser.clear();
-  newUser["n"] = USER_NAME;       // Usrename
-  newUser["u"] = LIMIT_USE;       // Limited use
+  newUser["n"] = USER_NAME;       // Username
+  newUser["l"] = LIMIT_USE;       // Limited use
   newUser["o"] = MOMENTARY_DELAY; // Momentary on time
   newUser["f"] = RELAY_FUNCTION;  // Relay function
+  newUser["a"] = 0;               // access counts
+  newUser["ma"] = 0;              // max number of time user can access code
 }
 
 
@@ -165,10 +187,33 @@ void populateSystemInfo() {
 void turnBacklight(bool on) {
   if(on) {
     backLightState = true;
+    keypadLed.on();
   }
   else {
     backLightState = false;
+    keypadLed.off();
   }
+}
+
+bool checkUserAllowed(int id) {
+  const bool isLimited = usersInfo[id]["l"];
+  if(isLimited) {
+    const uint16_t maxAllowed = usersInfo[id]["ma"];
+    uint16_t count = 0;
+    count = usersInfo[id]["ma"].as<uint16_t>();
+    if(maxAllowed >= count) {
+      removeUser(id);
+      memory.updateUsers();
+      return false;
+    }
+    else {
+      count+= 1;
+      usersInfo[id]["ma"] = count;
+      memory.updateUsers();
+      return true;
+    }
+  }
+  return true;
 }
 
 
@@ -254,24 +299,26 @@ void watchKeypad() {
                 #endif
                 int id = matchUsers(passcode);
                 if(id != -1) {
-                  const uint8_t rFunc = usersInfo[id]["f"];
-                  switch(rFunc) { // check relay functions
-                    case 1: // Momentary
-                      uint16_t ot;
-                      ot = usersInfo[id]["o"].as<uint16_t>();
-                      relay.momentaryOnFor(ot);
-                      break;
-                    case 2: // Latch
-                      relay.on();
-                      break;
-                    case 3: // Unlatch
-                      relay.off();
-                      break;
-                    case 4: // Toggle
-                      relay.toggle();
-                      break;
-                    default:
-                      break;
+                  if(checkUserAllowed(id)) {
+                    const uint8_t rFunc = usersInfo[id]["f"];
+                    switch(rFunc) { // check relay functions
+                      case 1: // Momentary
+                        uint16_t ot;
+                        ot = usersInfo[id]["o"].as<uint16_t>();
+                        relay.momentaryOnFor(ot);
+                        break;
+                      case 2: // Latch
+                        relay.on();
+                        break;
+                      case 3: // Unlatch
+                        relay.off();
+                        break;
+                      case 4: // Toggle
+                        relay.toggle();
+                        break;
+                      default:
+                        break;
+                    }
                   }
                 }
               }
@@ -423,8 +470,7 @@ void watchKeypad() {
                     }
                     else if(deleteUser) {
                       registeredUsersCount--;
-                      usersInfo.remove(userId);
-                      buzzer.threeShortBeeps();
+                      removeUser(userId);
                       programStep = ADD_EDIT_DELETE;
                       memory.updateUsers();
                       #if (DEBUG == true)
@@ -464,21 +510,19 @@ void setup() {
     Serial.println("[Main] Setup started");
   #endif
   
-  
-  // deviceState = WAIT_PROGRAMING_CODE;
-  // currentPassLength = PROGRAM_ACCESS_CODE_LEN;
-  
   buzzer.init();
+  keypadLed.init();
   relay.begin();
   resetButton.begin();
   memory.init();
   memory.loadSystemInfo();
   memory.loadUsers();
+  turnBacklight(true);
   populateSystemInfo();
   
   registeredUsersCount = usersInfo.size();
   
-  // Server init
+  // Server initialization
   initServer();
   startServer();
   
@@ -583,7 +627,7 @@ bool updatesByServer() {
     int x = userExist(p);
     if(x != -1) {
       registeredUsersCount--;
-      usersInfo.remove(x);
+      removeUser(x);
       memory.updateUsers();
       return true;
     }

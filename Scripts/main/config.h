@@ -6,6 +6,7 @@
 #define LOCK_TYPE 1
 
 #define DEBUG     		true
+#define DEBUG_RTC     true
 #define DEBUG_MEMORY  true
 #define DEBUG_SERVER  true
 

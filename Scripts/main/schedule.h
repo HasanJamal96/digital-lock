@@ -1,10 +1,8 @@
-//  TimeAlarms.h - Arduino Time alarms header for use with Time library
-
 #ifndef schedule_h
 #define schedule_h
 
 #include <Arduino.h>
-#include "TimeLib.h"
+#include <TimeLib.h>
 
 #define dtNBR_ALARMS 100
 
@@ -45,11 +43,10 @@ typedef AlarmID_t AlarmId;  // Arduino friendly name
 #define dtINVALID_TIME     (time_t)(-1)
 #define AlarmHMS(_hr_, _min_, _sec_) (_hr_ * SECS_PER_HOUR + _min_ * SECS_PER_MIN + _sec_)
 
-typedef void (*OnTick_t)();  // alarm callback function typedef
+typedef void (*OnTick_t)(char *val);  // alarm callback function typedef
 
 // class defining an alarm instance, only used by dtAlarmsClass
-class AlarmClass
-{
+class AlarmClass {
 public:
   AlarmClass();
   OnTick_t onTickHandler;
@@ -57,32 +54,34 @@ public:
   time_t value;
   time_t nextTrigger;
   AlarmMode_t Mode;
+  char myVal[6];
 };
 
 // class containing the collection of alarms
-class ScheduleClass
-{
+class ScheduleClass {
 private:
   AlarmClass Alarm[dtNBR_ALARMS];
   void serviceAlarms();
   uint8_t isServicing;
   uint8_t servicedAlarmId; // the alarm currently being serviced
-  AlarmID_t create(time_t value, OnTick_t onTickHandler, uint8_t isOneShot, dtAlarmPeriod_t alarmType);
+  AlarmID_t create(time_t value, OnTick_t onTickHandler, uint8_t isOneShot, dtAlarmPeriod_t alarmType, const char *mv);
 
 public:
   ScheduleClass();
   // functions to create alarms and timers
 
   // trigger once at the given time in the future
-  AlarmID_t triggerOnce(time_t value, OnTick_t onTickHandler) {
+  AlarmID_t triggerOnce(time_t value, OnTick_t onTickHandler, const char *mv) {
     if (value <= 0) return dtINVALID_ALARM_ID;
-    return create(value, onTickHandler, true, dtExplicitAlarm);
+    Serial.println("Creating");
+    return create(value, onTickHandler, true, dtExplicitAlarm, mv);
   }
 
   // trigger once at given time of day
   AlarmID_t alarmOnce(time_t value, OnTick_t onTickHandler) {
     if (value <= 0 || value > SECS_PER_DAY) return dtINVALID_ALARM_ID;
-    return create(value, onTickHandler, true, dtDailyAlarm);
+      return 255;
+    //return create(value, onTickHandler, true, dtDailyAlarm);
   }
   AlarmID_t alarmOnce(const int H, const int M, const int S, OnTick_t onTickHandler) {
     return alarmOnce(AlarmHMS(H,M,S), onTickHandler);
@@ -92,13 +91,15 @@ public:
   AlarmID_t alarmOnce(const timeDayOfWeek_t DOW, const int H, const int M, const int S, OnTick_t onTickHandler) {
     time_t value = (DOW-1) * SECS_PER_DAY + AlarmHMS(H,M,S);
     if (value <= 0) return dtINVALID_ALARM_ID;
-    return create(value, onTickHandler, true, dtWeeklyAlarm);
+      return 255;
+    //return create(value, onTickHandler, true, dtWeeklyAlarm);
   }
 
   // trigger daily at given time of day
   AlarmID_t alarmRepeat(time_t value, OnTick_t onTickHandler) {
     if (value > SECS_PER_DAY) return dtINVALID_ALARM_ID;
-    return create(value, onTickHandler, false, dtDailyAlarm);
+      return 255;
+    //return create(value, onTickHandler, false, dtDailyAlarm);
   }
   AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
     return alarmRepeat(AlarmHMS(H,M,S), onTickHandler);
@@ -108,13 +109,15 @@ public:
   AlarmID_t alarmRepeat(const timeDayOfWeek_t DOW, const int H, const int M, const int S, OnTick_t onTickHandler) {
     time_t value = (DOW-1) * SECS_PER_DAY + AlarmHMS(H,M,S);
     if (value <= 0) return dtINVALID_ALARM_ID;
-    return create(value, onTickHandler, false, dtWeeklyAlarm);
+      return 255;
+    //return create(value, onTickHandler, false, dtWeeklyAlarm);
   }
 
   // trigger once after the given number of seconds
   AlarmID_t timerOnce(time_t value, OnTick_t onTickHandler) {
     if (value <= 0) return dtINVALID_ALARM_ID;
-    return create(value, onTickHandler, true, dtTimer);
+      return 255;
+    //return create(value, onTickHandler, true, dtTimer);
   }
   AlarmID_t timerOnce(const int H, const int M, const int S, OnTick_t onTickHandler) {
     return timerOnce(AlarmHMS(H,M,S), onTickHandler);
@@ -123,7 +126,8 @@ public:
   // trigger at a regular interval
   AlarmID_t timerRepeat(time_t value, OnTick_t onTickHandler) {
     if (value <= 0) return dtINVALID_ALARM_ID;
-    return create(value, onTickHandler, false, dtTimer);
+      return 255;
+    //return create(value, onTickHandler, false, dtTimer);
   }
   AlarmID_t timerRepeat(const int H,  const int M,  const int S, OnTick_t onTickHandler) {
     return timerRepeat(AlarmHMS(H,M,S), onTickHandler);
@@ -157,7 +161,7 @@ private:  // the following methods are for testing and are not documented as par
   bool isAlarm(AlarmID_t ID) const;               // returns true if id is for a time based alarm, false if its a timer or not allocated
 };
 
-extern ScheduleClass schedular;  // make an instance for the user
+// extern ScheduleClass schedular;  // make an instance for the user
 
 /*==============================================================================
  * MACROS

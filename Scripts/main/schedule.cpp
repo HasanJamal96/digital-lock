@@ -224,7 +224,7 @@ void ScheduleClass::serviceAlarms()
           Alarm[servicedAlarmId].updateNextTrigger();
         }
         if (TickHandler != NULL) {
-          (*TickHandler)();     // call the handler
+          (*TickHandler)(Alarm[servicedAlarmId].myVal);     // call the handler
         }
       }
     }
@@ -260,9 +260,9 @@ time_t ScheduleClass::getNextTrigger(AlarmID_t ID) const
 }
 
 // attempt to create an alarm and return true if successful
-AlarmID_t ScheduleClass::create(time_t value, OnTick_t onTickHandler, uint8_t isOneShot, dtAlarmPeriod_t alarmType)
+AlarmID_t ScheduleClass::create(time_t value, OnTick_t onTickHandler, uint8_t isOneShot, dtAlarmPeriod_t alarmType, const char *mv)
 {
-  if ( ! ( (dtIsAlarm(alarmType) && now() < SECS_PER_YEAR) || (dtUseAbsoluteValue(alarmType) && (value == 0)) ) ) {
+  if ( !  ( (dtIsAlarm(alarmType) && now() < SECS_PER_YEAR) || (dtUseAbsoluteValue(alarmType) && (value == 0)) ) ) {
     // only create alarm ids if the time is at least Jan 1 1971
     for (uint8_t id = 0; id < dtNBR_ALARMS; id++) {
       if (Alarm[id].Mode.alarmType == dtNotAllocated) {
@@ -271,10 +271,16 @@ AlarmID_t ScheduleClass::create(time_t value, OnTick_t onTickHandler, uint8_t is
         Alarm[id].Mode.isOneShot = isOneShot;
         Alarm[id].Mode.alarmType = alarmType;
         Alarm[id].value = value;
+        strcpy(Alarm[id].myVal, mv);
         enable(id);
         return id;  // alarm created ok
       }
     }
+  }
+  else {
+    Serial.println("Creating false");
+    Serial.println(dtIsAlarm(alarmType));
+    Serial.println(dtUseAbsoluteValue(alarmType));
   }
   return dtINVALID_ALARM_ID; // no IDs available or time is invalid
 }

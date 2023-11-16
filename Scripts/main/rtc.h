@@ -1,0 +1,65 @@
+#include <RTClib.h>
+
+
+class MyRtc {
+  public:
+  
+  
+    bool init() {
+      #if (DEBUG == true && DEBUG_RTC == true)
+        Serial.println("[RTC] Initializing");
+      #endif
+      _working = rtc.begin();
+      
+      #if (DEBUG == true && DEBUG_RTC == true)
+        if(_working) 
+          Serial.println("[RTC] Initialized");
+        else
+          Serial.println("[RTC] Initialization failed");
+      #endif
+      return _working;
+    }
+    
+
+    void setRtcTime(uint8_t h, uint8_t m, uint8_t s, uint8_t d, uint8_t mon, uint8_t y) {
+      _forceSync = true;
+      rtc.adjust(DateTime(y, mon, d, h, m, s));
+    }
+    
+    
+    // void loop() {
+    //   if(_working) {
+    //     _syncTime();
+    //   }
+    // }
+  
+  private:
+    RTC_DS1307 rtc;
+    
+    uint8_t _retries = 10;
+    bool _working = false;
+    bool _forceSync = true;
+    unsigned long  _lastSync    = 0;
+    const uint16_t _SYNC_AFTER = 3600; // time in seconds
+    
+    
+    // void _syncTime() { // this should run once every midnight or at boot or every time rtc adjusted by server
+    //   if(millis() - _lastSync >= _SYNC_AFTER || _forceSync) {
+    //     _forceSync = false;
+    //     DateTime now = rtc.now();
+        
+    //     uint8_t h = now.hour();
+    //     uint8_t m = now.minute();
+    //     uint8_t s = now.second();
+        
+    //     uint8_t d   = now.day();
+    //     uint8_t mon = now.month();
+    //     uint8_t y   = now.year();
+        
+        
+        
+    //     setTime(h, m, s, d, mon, y);
+    //     _lastSync = millis();
+    //   }
+    // }
+};

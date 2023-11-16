@@ -39,8 +39,12 @@ DynamicJsonDocument newUser(256);
 #include "memory.h"
 #include "button.h"
 #include "server.h"
-#if (LOCK_TYPE == 1)
+#if (LOCK_TYPE > 0) // Condition for builds other than DL100
 #include "schedule.h"
+#include "rtc.h"
+
+MyRtc         rtc;
+ScheduleClass schedular;
 #endif
 
 device_state_t      deviceState = NORMAL;
@@ -118,7 +122,7 @@ void matchAdminPasscode() {
 
 
 void removeUser(int id) {
-  usersInfo.remove(userId);
+  usersInfo.remove(id);
   buzzer.threeShortBeeps();
 }
 
@@ -155,12 +159,16 @@ void populatePasscode(char k) {
 
 void setDefaultNewUser() {
   newUser.clear();
-  newUser["n"] = USER_NAME;       // Username
-  newUser["l"] = LIMIT_USE;       // Limited use
-  newUser["o"] = MOMENTARY_DELAY; // Momentary on time
-  newUser["f"] = RELAY_FUNCTION;  // Relay function
-  newUser["a"] = 0;               // access counts
-  newUser["ma"] = 0;              // max number of time user can access code
+  newUser["n"]  = USER_NAME;       // Username
+  newUser["l"]  = LIMIT_USE;       // Limited use
+  newUser["o"]  = MOMENTARY_DELAY; // Momentary on time
+  newUser["f"]  = RELAY_FUNCTION;  // Relay function
+  newUser["a"]  = 0;               // access counts
+  newUser["ma"] = 0;               // max number of time user can access code
+  newUser["s"]  = 0;               // schedule active
+  newUser["e"]  = 0;               // schedule expire time in seconds
+  
+  
 }
 
 
@@ -197,6 +205,7 @@ void turnBacklight(bool on) {
 
 bool checkUserAllowed(int id) {
   const bool isLimited = usersInfo[id]["l"];
+  bool allowed = true;
   if(isLimited) {
     const uint16_t maxAllowed = usersInfo[id]["ma"];
     uint16_t count = 0;
@@ -204,16 +213,27 @@ bool checkUserAllowed(int id) {
     if(maxAllowed >= count) {
       removeUser(id);
       memory.updateUsers();
-      return false;
+      allowed = false;
     }
     else {
       count+= 1;
       usersInfo[id]["ma"] = count;
       memory.updateUsers();
-      return true;
+      allowed = true;
     }
   }
-  return true;
+  #if (LOCK_TYPE > 0) // Condition for builds other than DL100
+    const bool isScheduled = usersInfo[id]["s"];
+    if(isScheduled) {
+      const unsigned long expiry = usersInfo[id]["e"];
+      if(millis() >= expiry) {
+        allowed = false;
+        removeUser(id);
+        memory.updateUsers();
+      }
+    }
+  #endif
+  return allowed;
 }
 
 
@@ -503,6 +523,51 @@ void watchKeypad() {
   }
 }
 
+void removeUserBySchedule(char *code) {
+  int id = userExist(code);
+  if(id != -1) {
+    usersInfo.remove(id);
+    memory.updateUsers();
+    #if (DEBUG == true)
+      Serial.println("[Main] User removed by schedular");
+    #endif
+  }
+}
+
+
+void addNewSchedule(const unsigned long ex, char *code) {
+  schedular.triggerOnce(ex, removeUserBySchedule, code);
+}
+
+
+
+#if (LOCK_TYPE > 0)
+void setSchedules() {
+  #if (DEBUG == true)
+    Serial.println("[Main] Setting schedules");
+  #endif
+  
+  for(int i=0; i<registeredUsersCount; i++) {
+    const bool isScheduled = usersInfo[i]["s"];
+    if(isScheduled) {
+      const unsigned long expiry = usersInfo[i]["e"];
+      if(now() >= expiry) {
+        usersInfo.remove(i);
+        memory.updateUsers();
+      }
+      else {
+        const char *co = usersInfo[i]["p"];
+        addNewSchedule(expiry, co);
+      }
+    }
+  }
+  
+  #if (DEBUG == true)
+    Serial.println("[Main] Schedules set");
+  #endif
+}
+#endif
+
 
 void setup() {
   #if (DEBUG == true)
@@ -519,8 +584,13 @@ void setup() {
   memory.loadUsers();
   turnBacklight(true);
   populateSystemInfo();
-  
+
   registeredUsersCount = usersInfo.size();
+  
+  #if (LOCK_TYPE > 0) // Condition for builds other than DL100
+    rtc.init();
+    setSchedules();
+  #endif
   
   // Server initialization
   initServer();
@@ -543,7 +613,6 @@ void changeModeToNormal() {
     Serial.println("[Main] Device mode is changed to NORMAL");
   #endif
 }
-
 
 
 void deviceModeLoop() {

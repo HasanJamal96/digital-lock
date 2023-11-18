@@ -10,6 +10,20 @@ class MyRtc {
         Serial.println("[RTC] Initializing");
       #endif
       _working = rtc.begin();
+      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+      DateTime now = rtc.now();
+        
+      int h = now.hour();
+      int m = now.minute();
+      int s = now.second();
+  
+      int d   = now.day();
+      int mon = now.month();
+      int y   = now.year();
+    
+    
+    
+     setTime(h, m, s, d, mon, y);
       
       #if (DEBUG == true && DEBUG_RTC == true)
         if(_working) 

@@ -1,21 +1,18 @@
 /*
   # Completed
-    ## Keypad Functions
-      - Delete user
-      - Add user
-      - Edit user
-      - Saving data in SPIFFS
-      - Reset functionality
-      - Webserver
+    - Delete user
+    - Add user
+    - Edit user
+    - Saving data in SPIFFS
+    - Reset functionality
+    - Webserver
+    - Guest user delete
   
   # Partially Completed
     - Websocket
     - Keypad Backlight
     - Lockout settings
     
-  
-  
-  
   # ToDo
     - Exit input
     
@@ -28,6 +25,7 @@
 DynamicJsonDocument usersInfo(4096);
 DynamicJsonDocument systemInfo(1024);
 DynamicJsonDocument newUser(256);
+DynamicJsonDocument serverData(1024);
 
 
 #include "config.h"
@@ -39,12 +37,13 @@ DynamicJsonDocument newUser(256);
 #include "memory.h"
 #include "button.h"
 #include "server.h"
-#if (LOCK_TYPE > 0) // Condition for builds other than DL100
-#include "schedule.h"
-#include "rtc.h"
 
-MyRtc         rtc;
-ScheduleClass schedular;
+#if (LOCK_TYPE > 0) // Condition for builds other than DL100
+  #include "schedule.h"
+  #include "rtc.h"
+  
+  MyRtc         rtc;
+  ScheduleClass schedular;
 #endif
 
 device_state_t      deviceState = NORMAL;
@@ -55,9 +54,9 @@ programing_step_t   programStep = NONE;
 Memory memory;
 Buzzer buzzer      (BUZZER_PIN);
 Led    exitLed     (EXIT_LED_PIN);
-Relay  relay       (RELAY_PIN, RELAY_LED_PIN);
-Led    keypadLed   (KEYPAD_LED_PIN);
 Button resetButton (RESET_BTN_PIN);
+Led    keypadLed   (KEYPAD_LED_PIN);
+Relay  relay       (RELAY_PIN, RELAY_LED_PIN);
 Keypad keypad      (makeKeymap(keys), KEYPAD_R_PINS, KEYPAD_C_PINS, ROWS, COLS);
 
 
@@ -78,11 +77,11 @@ void valid_invalid_beeps(bool valid) {
 
 
 
-int userExist(char *code) {
-  if(passcodeIndex == maxPasscodeLength) {
+int userExist(char *code, bool x = false) {
+  if(passcodeIndex == maxPasscodeLength || x) {
     for(uint16_t i=0; i<registeredUsersCount; i++) {
-      const char *p = usersInfo[i]["p"];
-      if(strcmp(p, code) == 0) {
+      const char *up = usersInfo[i]["p"];
+      if(strcmp(up, code) == 0) {
         return i;
       }
     }
@@ -147,13 +146,15 @@ void populatePasscode(char k) {
 
 /*
   {
-    "n": "user's name 19 characters max", -> string
-    "p": "user's password 19 characters max", -> string
-    "l": "limited use", -> bool
-    "f": "Relay function", -> uint8_t
-    "o": "Momentary on time in milli seconds ", -> uint32_t
-    "a": "number of times code used", -> uint16_t
-    "ma" :"maximum number of time allowed to use code", -> uin16_t
+    "n" : "user's name 19 characters max", -> string
+    "p" : "user's password 19 characters max", -> string
+    "l" : "limited use", -> bool
+    "f" : "Relay function", -> uint8_t
+    "o" : "Momentary on time in milli seconds ", -> uint32_t
+    "a" : "number of times code used", -> uint16_t
+    "ma": "maximum number of time allowed to use code", -> uin16_t
+    "s" : "guest user", -> 0,1
+    "e" : "time in seconds" -> unsigned long 
   }
 */
 
@@ -167,8 +168,6 @@ void setDefaultNewUser() {
   newUser["ma"] = 0;               // max number of time user can access code
   newUser["s"]  = 0;               // schedule active
   newUser["e"]  = 0;               // schedule expire time in seconds
-  
-  
 }
 
 
@@ -463,7 +462,6 @@ void watchKeypad() {
                   if(functionConfirmed) {
                     if(addUser) {
                       newUser["f"] = selectedFunction;
-                      usersInfo.add(newUser);
                       if(registeredUsersCount >= MAX_SUPPORTED_USERS) { // do not add user is max limit is reached
                         setDefaultNewUser();
                         buzzer.invalidBeep();
@@ -472,6 +470,7 @@ void watchKeypad() {
                         #endif
                       }
                       else {
+                        usersInfo.add(newUser);
                         registeredUsersCount++;
                         memory.updateUsers();
                         buzzer.threeShortBeeps();
@@ -533,24 +532,33 @@ void watchKeypad() {
 }
 
 void removeUserBySchedule(char *code) {
-  int id = userExist(code);
+  int id = userExist(code, true);
   if(id != -1) {
     usersInfo.remove(id);
     memory.updateUsers();
     #if (DEBUG == true)
-      Serial.println("[Main] User removed by schedular");
+      Serial.println("[Schedular] User removed");
     #endif
   }
+  #if (DEBUG == true)
+    else {
+        Serial.println("[Schedular] User not exist");
+    }
+  #endif
 }
 
 
 void addNewSchedule(const unsigned long ex, const char *code) {
   if(schedular.triggerOnce(ex, removeUserBySchedule, code) == 255) {
-    Serial.println("[Main] Unable to add schedule");
+    #if (DEBUG == true)
+      Serial.println("[Schedular] Unable to add schedule");
+    #endif
   }
-  else {
-    Serial.println("[Main] Schedule added");
-  }
+  #if (DEBUG == true)
+    else {
+      Serial.println("[Schedular] Schedule added");
+    }
+  #endif
 }
 
 
@@ -560,12 +568,11 @@ void setSchedules() {
   #if (DEBUG == true)
     Serial.println("[Main] Setting schedules");
   #endif
-  
   for(int i=0; i<registeredUsersCount; i++) {
     const bool isScheduled = usersInfo[i]["s"];
     if(isScheduled) {
       const unsigned long expiry = usersInfo[i]["e"];
-      if(now() >= expiry) { // remove user if time peroid is already crossed
+      if(now() >= expiry) { // remove user if time peroid is already passed
         usersInfo.remove(i);
         memory.updateUsers();
       }
@@ -599,6 +606,12 @@ void setup() {
   turnBacklight(true);
   populateSystemInfo();
 
+  setDefaultNewUser();
+
+  newUser["p"]  = "9874";
+  usersInfo.add(newUser);
+  
+
   registeredUsersCount = usersInfo.size();
   
   #if (LOCK_TYPE > 0) // Condition for builds other than DL100
@@ -609,6 +622,8 @@ void setup() {
   // Server initialization
   initServer();
   startServer();
+
+  registeredUsersCount = usersInfo.size();
   
   
   #if (DEBUG == true)
@@ -652,7 +667,7 @@ void deviceModeLoop() {
 
 void timedParameters() {
   if(deviceState != NORMAL) {
-    if(millis() - deviceStateChangeAt >= MODE_RESET_BACK_TO_NORMAL_AFTER) {
+    if(millis() - lastKeyPressed >= MODE_RESET_BACK_TO_NORMAL_AFTER) {
       changeModeToNormal();
     }
   }
@@ -686,9 +701,9 @@ bool updatesByServer() {
   }
   else if(editByServer) {
     editByServer = false;
-    char p[20];
-    strcpy(p, newUser["p"]);
-    int x = userExist(p);
+    char pas[7];
+    strcpy(pas, newUser["p"]);
+    int x = userExist(pas, true);
     if(x != -1) {
       usersInfo[x]["n"] = newUser["n"];
       usersInfo[x]["f"] = newUser["f"];
@@ -705,9 +720,9 @@ bool updatesByServer() {
   }
   else if(deleteByServer) {
     deleteByServer = false;
-    char p[20];
-    strcpy(p, newUser["p"]);
-    int x = userExist(p);
+    char pas[7];
+    strcpy(pas, newUser["p"]);
+    int x = userExist(pas, true);
     if(x != -1) {
       registeredUsersCount--;
       removeUser(x);
@@ -727,6 +742,17 @@ bool updatesByServer() {
   return false;
 }
 
+
+void relayFunctionsForServer(uint8_t func) {
+  switch(func) {
+    case 0: // on
+      relay.on();
+      break;
+    case 1: // off
+      relay.off();
+      break;
+  }
+}
 
 
 

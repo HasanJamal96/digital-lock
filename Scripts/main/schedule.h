@@ -54,7 +54,7 @@ public:
   time_t value;
   time_t nextTrigger;
   AlarmMode_t Mode;
-  char myVal[6];
+  char myVal[7];
 };
 
 // class containing the collection of alarms

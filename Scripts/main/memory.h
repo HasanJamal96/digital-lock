@@ -21,7 +21,7 @@ class Memory {
         }
         else {
           #if(DEBUG == true && DEBUG_MEMORY == true)
-            Serial.println("[SPIFFS] Formatting failed. Restarting ESP in 3 seconds.");
+            Serial.println("[SPIFFS] Formatting failed. Restarting ESP in 3 seconds");
           #endif
           delay(3000);
           ESP.restart();
@@ -49,12 +49,12 @@ class Memory {
           DeserializationError error = deserializeJson(usersInfo, file);
           if(error) {
             #if(DEBUG == true && DEBUG_MEMORY == true)
-              Serial.println("[SPIFFS] Failed to load users info.");
+              Serial.println("[SPIFFS] Failed to load users info");
             #endif
           }
           else {
             #if(DEBUG == true && DEBUG_MEMORY == true)
-              Serial.println("[SPIFFS] Users loaded.");
+              Serial.println("[SPIFFS] Users loaded");
             #endif
           }
         }
@@ -72,12 +72,12 @@ class Memory {
         serializeJson(usersInfo, file);
         file.close();
         #if(DEBUG == true && DEBUG_MEMORY == true)
-          Serial.println("[SPIFFS] Users updated.");
+          Serial.println("[SPIFFS] Users updated");
         #endif
       }
       else {
         #if(DEBUG == true && DEBUG_MEMORY == true)
-          Serial.println("[SPIFFS] Users failed to updated.");
+          Serial.println("[SPIFFS] Users failed to updated");
         #endif
       }
     }

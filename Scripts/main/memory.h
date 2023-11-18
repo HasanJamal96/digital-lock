@@ -30,6 +30,16 @@ class Memory {
       #if(DEBUG == true && DEBUG_MEMORY == true)
         Serial.println("[SPIFFS] Configured");
       #endif
+//      File root = SPIFFS.open("/");
+//      File file = root.openNextFile();
+//     
+//      while(file){
+//     
+//          Serial.print("FILE: ");
+//          Serial.println(file.name());
+//     
+//          file = root.openNextFile();
+//      }
     }
     
     void loadUsers() {

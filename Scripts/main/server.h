@@ -1,10 +1,11 @@
 #include "config.h"
 #include <WiFi.h>
 #include <AsyncTCP.h>
+#include <DNSServer.h>
 #include <ESPAsyncWebServer.h>
 
 IPAddress apIP(8,8,8,8);
-
+DNSServer dnsServer;
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
@@ -13,8 +14,9 @@ AsyncWebSocket ws("/ws");
 void routes();
 bool updatesByServer();
 
-void websocketLoop() {
-  ws.cleanupClients();
+void serverLoop() {
+  dnsServer.processNextRequest();
+//  ws.cleanupClients();
 }
 
 
@@ -119,10 +121,12 @@ public:
   }
 
   void handleRequest(AsyncWebServerRequest *request) {
-    if(request->url() == "/connecttest.txt" || request->url() == "/redirect" || request->url() == "/generate_204" || request->url() == "/fwlink" || request->url() == "/hotspot-detect.html")
+    if(request->url() == "/connecttest.txt" || request->url() == "/redirect" || request->url() == "/generate_204" || request->url() == "/fwlink" || request->url() == "/hotspot-detect.html") {
+//      Serial.println("Inside captive-portal");
       request->redirect("http://8.8.8.8/");
+    }
     else
-      request->send_P(200, "text/html", "");
+      request->send(SPIFFS, "/index.html");
   }
 };
 
@@ -133,6 +137,7 @@ void initServer() {
   #endif
   
   WiFi.mode(WIFI_MODE_APSTA);
+//  WiFi.begin("EBMACS-2.4GHz", "ebmacs1234567890");
   
   #if (DEBUG == true && DEBUG_SERVER == true)
     Serial.println("[Server] Initialized");
@@ -140,10 +145,18 @@ void initServer() {
 }
 
 
+const char *JSON_PARSE_ERROR = "{\"success\":\"0\",\"error\":\"unable to parse json\"}";
+
 void routes() {
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send_P(200, "text/html", "");
+  server.on("/assets/<filename>", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(request->url());
+    request->send(SPIFFS, request->url(), "text/javascript");
   });
+  
+  server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
+
+
+  
   server.on("/get-users", HTTP_GET, [](AsyncWebServerRequest *request) {
     #if (DEBUG == true && DEBUG_SERVER == true)
       Serial.println("[Server] Sending users ");
@@ -166,14 +179,14 @@ void routes() {
       rec += (char)data[i];
     DeserializationError error = deserializeJson(systemInfo, rec);
     if(error) {
-      request->send(400, "text/plain", "{\"success\":\"0\",\"error\":\"unable to parse json\"}}");
+      request->send(400, "text/plain", JSON_PARSE_ERROR);
       return;
     }
     systemByServer = true;
     if(updatesByServer())
       request->send(200, "text/plain", "{\"success\":\"1\"}}");
     else
-      request->send(200, "text/plain", "{\"success\":\"0\",\"error\":\"unable to update system info\"}}");
+      request->send(200, "text/plain", JSON_PARSE_ERROR);
   });
   server.on("/new-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total){
     String rec = "";
@@ -181,7 +194,7 @@ void routes() {
       rec += (char)data[i];
     DeserializationError error = deserializeJson(newUser, rec);
     if(error) {
-      request->send(400, "text/plain", "{\"success\":\"0\",\"error\":\"unable to parse json\"}}");
+      request->send(400, "text/plain", JSON_PARSE_ERROR);
       return;
     }
     addByServer = true;
@@ -196,7 +209,7 @@ void routes() {
       rec += (char)data[i];
     DeserializationError error = deserializeJson(newUser, rec);
     if(error) {
-      request->send(400, "text/plain", "{\"success\":\"0\",\"error\":\"unable to parse json\"}}");
+      request->send(400, "text/plain", JSON_PARSE_ERROR);
       return;
     }
     deleteByServer = false;
@@ -211,7 +224,7 @@ void routes() {
       rec += (char)data[i];
     DeserializationError error = deserializeJson(newUser, rec);
     if(error) {
-      request->send(400, "text/plain", "{\"success\":\"0\",\"error\":\"unable to parse json\"}}");
+      request->send(400, "text/plain", JSON_PARSE_ERROR);
       return;
     }
     editByServer = true;
@@ -220,11 +233,16 @@ void routes() {
     else
       request->send(200, "text/plain", "{\"success\":\"0\",\"error\":\"user not found\"}}");
   });
+  server.onNotFound([](AsyncWebServerRequest *request){
+    request->send(404);
+  });
 }
 
 void startServer() {
   WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
   WiFi.softAP(apName, apPass);
+  dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+  dnsServer.start(53, "*", WiFi.softAPIP());
   server.addHandler(new CaptiveRequestHandler()).setFilter(ON_AP_FILTER);
   DefaultHeaders::Instance().addHeader(F("Access-Control-Allow-Origin"), F("*"));
   DefaultHeaders::Instance().addHeader(F("Access-Control-Allow-Headers"), F("content-type"));
@@ -239,6 +257,7 @@ void startServer() {
 
 void closeServer() {
   server.end();
+  server.reset();
   #if (DEBUG == true && DEBUG_SERVER == true)
     Serial.println("[Server] Closed");
   #endif

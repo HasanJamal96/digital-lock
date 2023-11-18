@@ -1,14 +1,15 @@
 /*
   0 -> DL100
-  1 -> DL1500
-
+  1 -> DL1500 Timer
+  2 -> DL1500 Wi-Fi
+  3 -> DL2000
 */
 #define LOCK_TYPE 1
 
-#define DEBUG     		true
-#define DEBUG_RTC     true
-#define DEBUG_MEMORY  true
-#define DEBUG_SERVER  true
+#define DEBUG     		true // false will disable all debug logs
+#define DEBUG_RTC     true // false will only disable RTC related logs 
+#define DEBUG_MEMORY  true // false will only disable Memory related logs
+#define DEBUG_SERVER  true // false will only disable Server related logs
 
 
 #if (DEBUG == true)
@@ -42,3 +43,14 @@
 #define LOCKOUT           0           // 0-> Off, 1->On
 
 #define MAX_INVALID_ATTEMPTS  5
+
+#define MODE_RESET_BACK_TO_NORMAL_AFTER  240000 // time in milli seconds
+
+
+#if (LOCK_TYPE == 0)
+  #define MAX_SUPPORTED_USERS  100
+#elif (LOCK_TYPE < 2)
+  #define MAX_SUPPORTED_USERS  1000
+#else
+  #define MAX_SUPPORTED_USERS  10000
+#endif

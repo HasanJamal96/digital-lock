@@ -5,11 +5,11 @@
       - Add user
       - Edit user
       - Saving data in SPIFFS
+      - Reset functionality
+      - Webserver
   
   # Partially Completed
-    - Webserver
     - Websocket
-    - Reset functionality
     - Keypad Backlight
     - Lockout settings
     
@@ -464,10 +464,19 @@ void watchKeypad() {
                     if(addUser) {
                       newUser["f"] = selectedFunction;
                       usersInfo.add(newUser);
-                      registeredUsersCount++;
-                      buzzer.threeShortBeeps();
+                      if(registeredUsersCount >= MAX_SUPPORTED_USERS) { // do not add user is max limit is reached
+                        setDefaultNewUser();
+                        buzzer.invalidBeep();
+                        #if (DEBUG == true)
+                          Serial.println("[Main] User limit reach");
+                        #endif
+                      }
+                      else {
+                        registeredUsersCount++;
+                        memory.updateUsers();
+                        buzzer.threeShortBeeps();
+                      }
                       programStep = ADD_EDIT_DELETE;
-                      memory.updateUsers();
                       #if (DEBUG == true)
                         Serial.println("[Main] User added");
                         serializeJsonPretty(usersInfo, Serial);
@@ -482,7 +491,7 @@ void watchKeypad() {
                       programStep = ADD_EDIT_DELETE;
                       memory.updateUsers();
                       #if (DEBUG == true)
-                        Serial.printf("User Edited with id %d\n", userId);
+                        Serial.printf("[Main] User edited with id %d\n", userId);
                         serializeJsonPretty(usersInfo, Serial);
                         Serial.println();
                       #endif
@@ -494,7 +503,7 @@ void watchKeypad() {
                       programStep = ADD_EDIT_DELETE;
                       memory.updateUsers();
                       #if (DEBUG == true)
-                        Serial.printf("User deleted with id %d\n", userId);
+                        Serial.printf("[Main] User deleted with id %d\n", userId);
                         serializeJsonPretty(usersInfo, Serial);
                         Serial.println();
                       #endif
@@ -535,8 +544,13 @@ void removeUserBySchedule(char *code) {
 }
 
 
-void addNewSchedule(const unsigned long ex, char *code) {
-  schedular.triggerOnce(ex, removeUserBySchedule, code);
+void addNewSchedule(const unsigned long ex, const char *code) {
+  if(schedular.triggerOnce(ex, removeUserBySchedule, code) == 255) {
+    Serial.println("[Main] Unable to add schedule");
+  }
+  else {
+    Serial.println("[Main] Schedule added");
+  }
 }
 
 
@@ -551,7 +565,7 @@ void setSchedules() {
     const bool isScheduled = usersInfo[i]["s"];
     if(isScheduled) {
       const unsigned long expiry = usersInfo[i]["e"];
-      if(now() >= expiry) {
+      if(now() >= expiry) { // remove user if time peroid is already crossed
         usersInfo.remove(i);
         memory.updateUsers();
       }
@@ -719,9 +733,10 @@ bool updatesByServer() {
 void loop() {
   watchKeypad();
   deviceModeLoop();
-  websocketLoop();
+  serverLoop();
   timedParameters();
   if(relay.status()) {
     relay.loop();
   }
+  schedular.delay(100); // check all schedules
 }

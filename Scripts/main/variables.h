@@ -1,7 +1,3 @@
-const uint16_t MAX_SUPPORTED_USERS = 1000;
-const uint32_t MODE_RESET_BACK_TO_NORMAL_AFTER = 240000; // time in milli seconds
-
-
 typedef enum : uint8_t {
   NORMAL,
   WAIT_PROGRAMING_CODE,

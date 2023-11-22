@@ -233,8 +233,7 @@ void ScheduleClass::serviceAlarms()
 }
 
 // returns the absolute time of the next scheduled alarm, or 0 if none
-time_t ScheduleClass::getNextTrigger() const
-{
+time_t ScheduleClass::getNextTrigger() const {
   time_t nextTrigger = 0;
 
   for (uint8_t id = 0; id < dtNBR_ALARMS; id++) {
@@ -260,8 +259,7 @@ time_t ScheduleClass::getNextTrigger(AlarmID_t ID) const
 }
 
 // attempt to create an alarm and return true if successful
-AlarmID_t ScheduleClass::create(time_t value, OnTick_t onTickHandler, uint8_t isOneShot, dtAlarmPeriod_t alarmType, const char *mv)
-{
+AlarmID_t ScheduleClass::create(time_t value, OnTick_t onTickHandler, uint8_t isOneShot, dtAlarmPeriod_t alarmType, const char *mv) {
   if ( !  ( (dtIsAlarm(alarmType) && now() < SECS_PER_YEAR) || (dtUseAbsoluteValue(alarmType) && (value == 0)) ) ) {
     // only create alarm ids if the time is at least Jan 1 1971
     for (uint8_t id = 0; id < dtNBR_ALARMS; id++) {

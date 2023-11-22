@@ -15,11 +15,17 @@
     
   # ToDo
     - Exit input
-    
+  
+  
+  # External Libraries used in this project
+    (1.1.1) AsyncTCP.h              https://github.com/me-no-dev/AsyncTCP
+    (v6)    ArduinoJson.h           https://arduinojson.org/
+    (1.2.3) ESPAsyncWebServer.h     https://github.com/me-no-dev/ESPAsyncWebServer
+    (2.0.2) Ethernet.h              https://github.com/arduino-libraries/Ethernet
 */
 
 
-#include <ArduinoJson.h> // https://arduinojson.org/
+#include <ArduinoJson.h>
 
 
 DynamicJsonDocument usersInfo(4096);
@@ -36,7 +42,14 @@ DynamicJsonDocument serverData(1024);
 #include "Keypad.h"
 #include "memory.h"
 #include "button.h"
-#include "server.h"
+#if (LOCK_TYPE < 2)
+  #include "basic_server.h"
+#else
+  #include "advance_server.h"
+#endif
+
+
+
 
 #if (LOCK_TYPE > 0) // Condition for builds other than DL100
   #include "schedule.h"

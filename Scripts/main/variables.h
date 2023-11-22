@@ -1,3 +1,5 @@
+#include "config.h"
+
 typedef enum : uint8_t {
   NORMAL,
   WAIT_PROGRAMING_CODE,
@@ -108,5 +110,30 @@ char programAccessCode[PROGRAM_ACCESS_CODE_LEN+1] = {};
 bool sleepMode = false;
 bool lockOut   = false;
 
+#if (LOCK_TYPE > 1)
+bool enableEthernet = false;
+typedef enum : uint8_t {
+  INTERNET_CONNECTED,
+  INTERNET_DISCONNECTED,
+  INTERNET_CONNECTING,
+}internet_status_t;
 
+typedef enum : uint8_t {
+  ERROR_NONE,
+  ERROR_NO_INTERNET,
+  ERROR_NO_WIFI,
+  ERROR_INVALID_PASSWORD,
+  ERROR_NO_CABLE_CONNECTED,
+}internet_errors_t;
 
+char wifiName[30];
+char wifiPass[30];
+
+unsigned long connectionStartTime = 0;
+const uint16_t  RETRY_AFTER = 20000; // time in milli seconds
+
+bool enableEthernet = false;
+
+char deviceIdForServer[20];
+
+#endif

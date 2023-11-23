@@ -706,22 +706,31 @@ void timedParameters() {
 bool updatesByServer() {
   if(addByServer) {
     addByServer = false;
-    usersInfo.add(newUser);
-    registeredUsersCount++;
-    buzzer.threeShortBeeps();
-    memory.updateUsers();
-    return true;
+    char pas[7];
+    strcpy(pas, newUser["p"]);
+    Serial.printf("Adding ser %s\n", pas);
+    int x = userExist(pas, true);
+    if(x == -1) {
+      usersInfo.add(newUser);
+      registeredUsersCount++;
+      buzzer.threeShortBeeps();
+      memory.updateUsers();
+      return true;
+    }
+    else {
+      return false;
+    }
   }
   else if(editByServer) {
     editByServer = false;
     char pas[7];
     strcpy(pas, newUser["p"]);
+    Serial.printf("User editing %s\n", pas);
     int x = userExist(pas, true);
     if(x != -1) {
       usersInfo[x]["n"] = newUser["n"];
       usersInfo[x]["f"] = newUser["f"];
       usersInfo[x]["p"] = newUser["p"];
-      usersInfo[x]["u"] = newUser["u"];
       usersInfo[x]["o"] = newUser["o"];
       buzzer.threeShortBeeps();
       memory.updateUsers();
@@ -735,6 +744,7 @@ bool updatesByServer() {
     deleteByServer = false;
     char pas[7];
     strcpy(pas, newUser["p"]);
+    Serial.printf("User deleting %s\n", pas);
     int x = userExist(pas, true);
     if(x != -1) {
       registeredUsersCount--;

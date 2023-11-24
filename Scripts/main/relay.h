@@ -1,5 +1,5 @@
-#define RELAY_ON  HIGH
-#define RELAY_OFF LOW
+#define RELAY_ON  LOW
+#define RELAY_OFF HIGH
 #define LED_ON  HIGH
 #define LED_OFF LOW
 

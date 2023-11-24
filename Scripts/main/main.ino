@@ -28,10 +28,15 @@
 #include <ArduinoJson.h>
 
 
-DynamicJsonDocument usersInfo(4096);
-DynamicJsonDocument systemInfo(1024);
-DynamicJsonDocument newUser(256);
-DynamicJsonDocument serverData(1024);
+// StaticJsonDocument usersInfo(4096);
+// StaticJsonDocument systemInfo(1024);
+// StaticJsonDocument newUser(256);
+
+StaticJsonDocument<8192> usersInfo;
+// DynamicJsonDocument usersInfo(2000000);
+StaticJsonDocument<512> systemInfo;
+StaticJsonDocument<256> newUser;
+
 
 
 #include "config.h"
@@ -42,22 +47,6 @@ DynamicJsonDocument serverData(1024);
 #include "Keypad.h"
 #include "memory.h"
 #include "button.h"
-#if (LOCK_TYPE < 2)
-  #include "basic_server.h"
-#else
-  #include "advance_server.h"
-#endif
-
-
-
-
-#if (LOCK_TYPE > 0) // Condition for builds other than DL100
-  #include "schedule.h"
-  #include "rtc.h"
-  
-  MyRtc         rtc;
-  ScheduleClass schedular;
-#endif
 
 device_state_t      deviceState = NORMAL;
 programing_step_t   programStep = NONE;
@@ -71,6 +60,21 @@ Button resetButton (RESET_BTN_PIN);
 Led    keypadLed   (KEYPAD_LED_PIN);
 Relay  relay       (RELAY_PIN, RELAY_LED_PIN);
 Keypad keypad      (makeKeymap(keys), KEYPAD_R_PINS, KEYPAD_C_PINS, ROWS, COLS);
+
+#if (LOCK_TYPE < 2) // For DL100 and DL1500 Timer
+  #include "basic_server.h"
+#else
+  #include "advance_server.h"
+#endif
+
+#if (LOCK_TYPE > 0) // For other than DL100
+  #include "schedule.h"
+  #include "rtc.h"
+  
+  MyRtc         rtc;
+  ScheduleClass schedular;
+#endif
+
 
 
 void valid_invalid_beeps(bool valid) {
@@ -101,8 +105,6 @@ int userExist(char *code, bool x = false) {
   }
   return -1;
 }
-
-
 
 
 int matchUsers(char *code) {
@@ -179,8 +181,10 @@ void setDefaultNewUser() {
   newUser["f"]  = RELAY_FUNCTION;  // Relay function
   newUser["a"]  = 0;               // access counts
   newUser["ma"] = 0;               // max number of time user can access code
-  newUser["s"]  = 0;               // schedule active
-  newUser["e"]  = 0;               // schedule expire time in seconds
+  #if(LOCK_TYPE > 0)               // Condition for builds other than DL100
+    newUser["s"]  = 0;             // schedule active
+    newUser["e"]  = 0;             // schedule expire time in seconds
+  #endif
 }
 
 
@@ -617,13 +621,7 @@ void setup() {
   memory.loadSystemInfo();
   memory.loadUsers();
   turnBacklight(true);
-  populateSystemInfo();
-
-  setDefaultNewUser();
-
-  newUser["p"]  = "9874";
-  usersInfo.add(newUser);
-  
+  populateSystemInfo(); 
 
   registeredUsersCount = usersInfo.size();
   
@@ -708,7 +706,6 @@ bool updatesByServer() {
     addByServer = false;
     char pas[7];
     strcpy(pas, newUser["p"]);
-    Serial.printf("Adding ser %s\n", pas);
     int x = userExist(pas, true);
     if(x == -1) {
       usersInfo.add(newUser);
@@ -725,12 +722,11 @@ bool updatesByServer() {
     editByServer = false;
     char pas[7];
     strcpy(pas, newUser["p"]);
-    Serial.printf("User editing %s\n", pas);
     int x = userExist(pas, true);
     if(x != -1) {
       usersInfo[x]["n"] = newUser["n"];
       usersInfo[x]["f"] = newUser["f"];
-      usersInfo[x]["p"] = newUser["p"];
+      usersInfo[x]["p"] = newUser["np"];
       usersInfo[x]["o"] = newUser["o"];
       buzzer.threeShortBeeps();
       memory.updateUsers();
@@ -744,7 +740,6 @@ bool updatesByServer() {
     deleteByServer = false;
     char pas[7];
     strcpy(pas, newUser["p"]);
-    Serial.printf("User deleting %s\n", pas);
     int x = userExist(pas, true);
     if(x != -1) {
       registeredUsersCount--;
@@ -766,13 +761,13 @@ bool updatesByServer() {
 }
 
 
-void relayFunctionsForServer(uint8_t func) {
-  switch(func) {
-    case 0: // on
-      relay.on();
-      break;
-    case 1: // off
+void relayFunctionsForServer(uint8_t x) {
+  switch(x) {
+    case 0: // off
       relay.off();
+      break;
+    case 1: // on
+      relay.on();
       break;
   }
 }

@@ -110,8 +110,9 @@ char programAccessCode[PROGRAM_ACCESS_CODE_LEN+1] = {};
 bool sleepMode = false;
 bool lockOut   = false;
 
+bool isClientConnected = false;
+
 #if (LOCK_TYPE > 1)
-bool enableEthernet = false;
 typedef enum : uint8_t {
   INTERNET_CONNECTED,
   INTERNET_DISCONNECTED,
@@ -132,8 +133,12 @@ char wifiPass[30];
 unsigned long connectionStartTime = 0;
 const uint16_t  RETRY_AFTER = 20000; // time in milli seconds
 
-bool enableEthernet = false;
-
+char scanResult[200];
 char deviceIdForServer[20];
+
+bool wifiConnected = false;
+bool ethernetConnected = false;
+char enternetConncetionError[50];
+char wifiConncetionError[50];
 
 #endif

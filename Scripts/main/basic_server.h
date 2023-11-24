@@ -7,145 +7,22 @@
 IPAddress apIP(8,8,8,8);
 DNSServer dnsServer;
 AsyncWebServer server(80);
-AsyncWebSocket ws("/ws");
+
 
 const char *JSON_PARSE_ERROR   = "{\"success\":\"0\",\"error\":\"unable to parse json\"}";
 const char *successMsg = "{\"success\":\"1\"}";
 
 void routes();
 bool updatesByServer();
-void relayFunctionsForServer(uint8_t func);
+void relayFunctionsForServer(uint8_t func); // function's working defined in main.ino
 
 
 
 void serverLoop() {
-  dnsServer.processNextRequest();
-  ws.cleanupClients();
+  if(isClientConnected)
+    dnsServer.processNextRequest();
 }
 
-
-/*
-  open : {
-          "f":"r", 
-          "a":"o"
-         }
-  close: {
-          "f":"r",
-          "a":"c"
-         }
-
-  add user: {
-              "f":"s",
-              "a":"au",
-              "d":"{user data}"
-            }
-  delete user: {
-                 "f":"s",
-                 "a":"du",
-                 "p":"password"
-               }
-  edit user: {
-                 "f":"s",
-                 "a":"eu",
-                 "p": "password",
-                 "d": "{user data}"
-               }
-*/
-
-
-
-////////////////////////////////////////////////////  Websocket
-
-void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len){
-  if(type == WS_EVT_CONNECT) {
-   Serial.printf("ws[%s][%u] connect\n", server->url(), client->id());
-   client->printf("Hello Client %u :)", client->id());
-   client->ping();
-  }
-  else if(type == WS_EVT_DISCONNECT) {
-   Serial.printf("ws[%s][%u] disconnect\n", server->url(), client->id());
-  }
-  else if(type == WS_EVT_ERROR) {
-   Serial.printf("ws[%s][%u] error(%u): %s\n", server->url(), client->id(), *((uint16_t*)arg), (char*)data);
-  }
-  else if(type == WS_EVT_PONG) {
-   Serial.printf("ws[%s][%u] pong[%u]: %s\n", server->url(), client->id(), len, (len)?(char*)data:"");
-  }
-  else if(type == WS_EVT_DATA) {
-    
-    AwsFrameInfo * info = (AwsFrameInfo*)arg;
-    if(info->final && info->index == 0 && info->len == len) {
-      char msgReceived[len];
-      if(info->opcode == WS_TEXT) {
-        for(size_t i=0; i < info->len; i++) {
-          msgReceived[i] = (char) data[i];
-        }
-        DeserializationError error = deserializeJson(serverData, msgReceived);
-        if(error) {
-          client->text(JSON_PARSE_ERROR);
-          return;
-        }
-        else {
-          const char *x = serverData["f"];
-          if(x[0] == 'r') {
-            const char *a = serverData["a"];
-            if(a[0] == 'o') {
-              relayFunctionsForServer(0);
-              client->text(successMsg);
-            }
-            else if(a[0] == 'c') {
-              relayFunctionsForServer(1);
-              client->text(successMsg);
-            }
-            else {
-              client->text("{\"success\":\"0\",\"error\":\"invalid command\"}");
-            }
-          }
-          else if(x[0] == 's') {
-            const char *action = serverData["a"];
-            char errorMsg[100];
-            if(strcmp(action, "au") == 0) {
-              addByServer = true;
-              newUser = serverData["d"];
-              strcpy(errorMsg, "{\"success\":\"0\",\"error\":\"unable to add new user\"}");
-            }
-            else if(strcmp(action, "du") == 0) {
-              deleteByServer = true;
-              newUser = serverData["d"];
-              strcpy(errorMsg, "{\"success\":\"0\",\"error\":\"unable to add delete user\"}");
-              newUser["p"] = serverData["p"];
-            }
-            else if(strcmp(action, "eu") == 0) {
-              editByServer = true;
-              newUser = serverData["d"];
-              strcpy(errorMsg, "{\"success\":\"0\",\"error\":\"unable to add edit user\"}");
-              newUser["p"] = serverData["p"];
-            }
-            else if(strcmp(action, "su") == 0) {
-              systemByServer = true;
-              systemInfo = serverData["d"];
-              strcpy(errorMsg, "{\"success\":\"0\",\"error\":\"unable to add update system information\"}");
-            }
-            if(updatesByServer()) {
-              client->text(successMsg);
-            }
-            else {
-              client->text(errorMsg);
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-
-
-
-
-
-
-////////////////////////////////////////////////////  Webserver and Captive portal
 
 class CaptiveRequestHandler : public AsyncWebHandler {
 public:
@@ -164,10 +41,27 @@ public:
       Serial.println("Inside captive-portal");
       request->redirect("http://8.8.8.8/");
     }
-    // else
-    //   request->send(SPIFFS, "/index.html");
+    else
+      request->send(SPIFFS, "/index.html");
   }
 };
+
+
+
+void apConnectionCallback(WiFiEvent_t event) {
+  if(event == ARDUINO_EVENT_WIFI_AP_STACONNECTED) {
+    #if(DEBUG == true && DEBUG_SERVER == true)
+      Serial.printf("[Internet] AP client connected\n");
+    #endif
+    isClientConnected = true;
+  }
+  else if(event == ARDUINO_EVENT_WIFI_AP_STADISCONNECTED) {
+    #if(DEBUG == true && DEBUG_SERVER == true)
+      Serial.printf("[Internet] AP client disconnected\n");
+    #endif
+    isClientConnected = false;
+  }
+}
 
 
 void initServer() {
@@ -176,6 +70,7 @@ void initServer() {
   #endif
   
   WiFi.mode(WIFI_MODE_APSTA);
+  WiFi.onEvent(apConnectionCallback);
   WiFi.begin("EBMACS-2.4GHz", "ebmacs1234567890");
   
   #if (DEBUG == true && DEBUG_SERVER == true)
@@ -186,7 +81,6 @@ void initServer() {
 
 void routes() {
   server.on("/assets/<filename>", HTTP_GET, [](AsyncWebServerRequest *request) {
-    Serial.println(request->url());
     request->send(SPIFFS, request->url(), "text/javascript");
   });
   
@@ -215,14 +109,14 @@ void routes() {
       rec += (char)data[i];
     DeserializationError error = deserializeJson(systemInfo, rec);
     if(error) {
-      request->send(200, "text/plain", JSON_PARSE_ERROR);
+      request->send(200, "application/json", JSON_PARSE_ERROR);
       return;
     }
     systemByServer = true;
     if(updatesByServer())
-      request->send(200, "text/plain", "{\"success\":\"1\"}");
+      request->send(200, "application/json", successMsg);
     else
-      request->send(200, "text/plain", JSON_PARSE_ERROR);
+      request->send(200, "application/json", JSON_PARSE_ERROR);
   });
   server.on("/new-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total){
     String rec = "";
@@ -230,15 +124,14 @@ void routes() {
       rec += (char)data[i];
     DeserializationError error = deserializeJson(newUser, rec);
     if(error) {
-      request->send(200, "text/plain", JSON_PARSE_ERROR);
+      request->send(200, "application/json", JSON_PARSE_ERROR);
       return;
     }
     addByServer = true;
-    Serial.println("/new-user");
     if(updatesByServer())
-      request->send(200, "text/plain", "{\"success\":\"1\"}");
+      request->send(200, "application/json", successMsg);
     else
-      request->send(200, "text/plain", "{\"success\":\"0\",\"error\":\"unable to add new user\"}");
+      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"unable to add new user\"}");
   });
   server.on("/delete-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total){
     String rec = "";
@@ -246,15 +139,14 @@ void routes() {
       rec += (char)data[i];
     DeserializationError error = deserializeJson(newUser, rec);
     if(error) {
-      request->send(200, "text/plain", JSON_PARSE_ERROR);
+      request->send(200, "application/json", JSON_PARSE_ERROR);
       return;
     }
     deleteByServer = true;
-    Serial.println("/delete-user");
     if(updatesByServer())
-      request->send(200, "text/plain", "{\"success\":\"1\"}");
+      request->send(200, "application/json", successMsg);
     else
-      request->send(200, "text/plain", "{\"success\":\"0\",\"error\":\"user not found\"}");
+      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"user not found\"}");
   });
   server.on("/update-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total){
     String rec = "";
@@ -262,17 +154,43 @@ void routes() {
       rec += (char)data[i];
     DeserializationError error = deserializeJson(newUser, rec);
     if(error) {
-      request->send(200, "text/plain", JSON_PARSE_ERROR);
+      request->send(200, "application/json", JSON_PARSE_ERROR);
       return;
     }
     editByServer = true;
-    Serial.println("/update-user");
     if(updatesByServer())
-      request->send(200, "text/plain", "{\"success\":\"1\"}");
+      request->send(200, "application/json", successMsg);
     else
-      request->send(200, "text/plain", "{\"success\":\"0\",\"error\":\"user not found\"}");
+      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"user not found\"}");
   });
-  server.onNotFound([](AsyncWebServerRequest *request){
+  server.on("/change-state",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total){
+    String rec = "";
+    for(int i=0; i<len; i++)
+      rec += (char)data[i];
+    DynamicJsonDocument serverData(50);
+    DeserializationError error = deserializeJson(serverData, rec);
+    if(error) {
+      request->send(200, "application/json", JSON_PARSE_ERROR);
+      return;
+    }
+    const int x = serverData["s"];
+    if(x < 2) {
+      relayFunctionsForServer(x);
+      request->send(200, "application/json", successMsg);
+    }
+    else {
+      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"invalid state\"}");
+    }
+  });
+  server.on("/get-state", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if(relay.status()) {
+      request->send(200, "application/json", "{\"success\":\"1\",\"s\":\"1\"}");
+    }
+    else {
+      request->send(200, "application/json", "{\"success\":\"1\",\"s\":\"0\"}");
+    }
+  });
+  server.onNotFound([](AsyncWebServerRequest *request) {
     request->send(404);
   });
 }
@@ -283,12 +201,13 @@ void startServer() {
   delay(1000);
   dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
   dnsServer.start(53, "*", WiFi.softAPIP());
-  server.addHandler(new CaptiveRequestHandler());
+  #if (DEBUG == true)
+    server.addHandler(new CaptiveRequestHandler());
+  #else
+    server.addHandler(new CaptiveRequestHandler()).setFilter(ON_AP_FILTER);
+  #endif
   DefaultHeaders::Instance().addHeader(F("Access-Control-Allow-Origin"), F("*"));
   DefaultHeaders::Instance().addHeader(F("Access-Control-Allow-Headers"), F("content-type"));
-  routes();
-  // ws.onEvent(onWsEvent);
-  // server.addHandler(&ws);
   server.begin();
   #if (DEBUG == true && DEBUG_SERVER == true)
     Serial.println("[Server] Started");

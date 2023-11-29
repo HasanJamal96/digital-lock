@@ -30,7 +30,7 @@ class Relay {
     
     void momentaryOnFor(uint32_t ms) {
       _momentary = true;
-      _onTime = ms;
+      _onTime = ms * 1000;
       _onAt = millis();
       on();
     }

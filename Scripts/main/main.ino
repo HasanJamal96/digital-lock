@@ -1,39 +1,18 @@
 /*
-  # Completed
-    - Delete user
-    - Add user
-    - Edit user
-    - Saving data in SPIFFS
-    - Reset functionality
-    - Webserver
-    - Guest user delete
-  
-  # Partially Completed
-    - Websocket
-    - Keypad Backlight
-    - Lockout settings
-    
-  # ToDo
-    - Exit input
-  
-  
-  # External Libraries used in this project
-    (1.1.1) AsyncTCP.h              https://github.com/me-no-dev/AsyncTCP
-    (v6)    ArduinoJson.h           https://arduinojson.org/
-    (1.2.3) ESPAsyncWebServer.h     https://github.com/me-no-dev/ESPAsyncWebServer
-    (2.0.2) Ethernet.h              https://github.com/arduino-libraries/Ethernet
+  # External Libraries used in this project, have to install manually
+    (1.1.1)  AsyncTCP.h              https://github.com/me-no-dev/AsyncTCP
+    (6.21.2) ArduinoJson.h           https://arduinojson.org/
+    (1.2.3)  ESPAsyncWebServer.h     https://github.com/me-no-dev/ESPAsyncWebServer
+    (2.0.2)  Ethernet.h              https://github.com/arduino-libraries/Ethernet
+    (1.6.1)  TimeLib.h               https://github.com/PaulStoffregen/Time
+    (2.1.3)  RTClib.h                https://github.com/adafruit/RTClib
+    (1.14.5) Adafruit_BusIO          https://github.com/adafruit/Adafruit_BusIO/tree/master
 */
 
 
 #include <ArduinoJson.h>
 
-
-// StaticJsonDocument usersInfo(4096);
-// StaticJsonDocument systemInfo(1024);
-// StaticJsonDocument newUser(256);
-
 StaticJsonDocument<8192> usersInfo;
-// DynamicJsonDocument usersInfo(2000000);
 StaticJsonDocument<512> systemInfo;
 StaticJsonDocument<256> newUser;
 
@@ -95,11 +74,15 @@ void valid_invalid_beeps(bool valid) {
 
 
 int userExist(char *code, bool x = false) {
+  if(!code)
+    return -1;
   if(passcodeIndex == maxPasscodeLength || x) {
     for(uint16_t i=0; i<registeredUsersCount; i++) {
       const char *up = usersInfo[i]["p"];
-      if(strcmp(up, code) == 0) {
-        return i;
+      if(up) {
+        if(strcmp(up, code) == 0) {
+          return i;
+        }
       }
     }
   }
@@ -225,15 +208,15 @@ bool checkUserAllowed(int id) {
   if(isLimited) {
     const uint16_t maxAllowed = usersInfo[id]["ma"];
     uint16_t count = 0;
-    count = usersInfo[id]["ma"].as<uint16_t>();
-    if(maxAllowed >= count) {
+    count = usersInfo[id]["a"].as<uint16_t>();
+    if(count >= maxAllowed) {
       removeUser(id);
       memory.updateUsers();
       allowed = false;
     }
     else {
       count+= 1;
-      usersInfo[id]["ma"] = count;
+      usersInfo[id]["a"] = count;
       memory.updateUsers();
       allowed = true;
     }
@@ -328,6 +311,8 @@ void watchKeypad() {
             break;
           case RELEASED:
             if(k == '#') {
+              if(!enterState)
+                break;
               enterState = false;
               if(deviceState == NORMAL) {
                 #if (DEBUG == true)
@@ -359,19 +344,21 @@ void watchKeypad() {
                 }
               }
               else if(deviceState == RESET_PASSWORD) {
+                deviceState = NORMAL;
                 memory.resetProgramAccess();
                 buzzer.threeShortBeeps();
                 #if (DEBUG == true)
-                  Serial.printf("[Main] Reset program access code to 000000");
+                  Serial.printf("[Main] Reset program access code to 000000\n");
                 #endif
               }
               else if(deviceState == RESET_ALL) {
+                deviceState = NORMAL;
                 memory.resetUsers();
                 memory.setDefaultsSettings();
                 buzzer.threeShortBeeps();
                 populateSystemInfo();
                 #if (DEBUG == true)
-                  Serial.printf("[Main] Reset everything to default");
+                  Serial.printf("[Main] Reset everything to default\n");
                 #endif
               }
               else if(deviceState == WAIT_PROGRAMING_CODE) {
@@ -564,7 +551,7 @@ void removeUserBySchedule(char *code) {
   #endif
 }
 
-
+#if (LOCK_TYPE > 0)
 void addNewSchedule(const unsigned long ex, const char *code) {
   if(schedular.triggerOnce(ex, removeUserBySchedule, code) == 255) {
     #if (DEBUG == true)
@@ -577,10 +564,6 @@ void addNewSchedule(const unsigned long ex, const char *code) {
     }
   #endif
 }
-
-
-
-#if (LOCK_TYPE > 0)
 void setSchedules() {
   #if (DEBUG == true)
     Serial.println("[Main] Setting schedules");
@@ -656,7 +639,7 @@ void changeModeToNormal() {
 
 
 void deviceModeLoop() {
-  if(cancelState) {
+  if(cancelState && !enterState) {
     if(millis() - cancelPressedAt >= EXIT_ENTER_PROGRAM_MODE) {
       if(deviceState == NORMAL) {
         deviceStateChangeAt = millis();
@@ -677,25 +660,34 @@ void deviceModeLoop() {
 
 
 void timedParameters() {
-  if(deviceState != NORMAL) {
-    if(millis() - lastKeyPressed >= MODE_RESET_BACK_TO_NORMAL_AFTER) {
-      changeModeToNormal();
-    }
-  }
+  bool btnState = resetButton.read();
   if(sleepMode && backLightState) {
     if(millis() - lastKeyPressed >= BACKLIGHT_OFF_AFTER) {
        turnBacklight(false);
     }
   }
-  resetButton.read();
-  if(cancelState && (millis() - cancelPressedAt >= 10000) && resetButton.pressedFor(10000)) {
-    buzzer.twoShortBeeps();
-    deviceState = RESET_PASSWORD;
-  }
-  if(cancelState && enterState) {
-    if((millis() - cancelPressedAt >= 10000) && (millis() - enterPressedAt >= 10000)) {
-      deviceState = RESET_ALL;
+  if(btnState) {
+    if(cancelState && (millis() - cancelPressedAt >= 10000) && resetButton.pressedFor(10000)) {
       buzzer.twoShortBeeps();
+      deviceState = RESET_PASSWORD;
+      cancelState = false;
+    }
+  }
+  else {
+    if(deviceState != RESET_PASSWORD && deviceState != RESET_ALL) {
+      deviceModeLoop();
+      if(deviceState != NORMAL) {
+        if(millis() - lastKeyPressed >= MODE_RESET_BACK_TO_NORMAL_AFTER) {
+          changeModeToNormal();
+        }
+      }
+      if(cancelState && enterState) {
+        if((millis() - cancelPressedAt >= 10000) && (millis() - enterPressedAt >= 10000)) {
+          deviceState = RESET_ALL;
+          buzzer.twoShortBeeps();
+          enterState = cancelState = false;
+        }
+      }
     }
   }
 }
@@ -724,10 +716,14 @@ bool updatesByServer() {
     strcpy(pas, newUser["p"]);
     int x = userExist(pas, true);
     if(x != -1) {
-      usersInfo[x]["n"] = newUser["n"];
-      usersInfo[x]["f"] = newUser["f"];
-      usersInfo[x]["p"] = newUser["np"];
-      usersInfo[x]["o"] = newUser["o"];
+      const char *np = newUser["np"];
+      newUser.remove("np");
+      usersInfo[x] = newUser;
+      usersInfo[x]["p"] = np;
+//      usersInfo[x]["n"] = newUser["n"];
+//      usersInfo[x]["f"] = newUser["f"];
+//      usersInfo[x]["p"] = newUser["np"];
+//      usersInfo[x]["o"] = newUser["o"];
       buzzer.threeShortBeeps();
       memory.updateUsers();
       return true;
@@ -776,11 +772,12 @@ void relayFunctionsForServer(uint8_t x) {
 
 void loop() {
   watchKeypad();
-  deviceModeLoop();
   serverLoop();
   timedParameters();
   if(relay.status()) {
     relay.loop();
   }
-  schedular.delay(100); // check all schedules
+  #if(LOCK_TYPE > 0)
+    schedular.delay(100); // check all schedules
+  #endif
 }

@@ -38,11 +38,10 @@ public:
 
   void handleRequest(AsyncWebServerRequest *request) {
     if(request->url() == "/connecttest.txt" || request->url() == "/redirect" || request->url() == "/generate_204" || request->url() == "/fwlink" || request->url() == "/hotspot-detect.html") {
-      Serial.println("Inside captive-portal");
       request->redirect("http://8.8.8.8/");
     }
-    else
-      request->send(SPIFFS, "/index.html");
+//    else
+//      request->send(SPIFFS, "/index.html");
   }
 };
 
@@ -71,7 +70,6 @@ void initServer() {
   
   WiFi.mode(WIFI_MODE_APSTA);
   WiFi.onEvent(apConnectionCallback);
-  WiFi.begin("EBMACS-2.4GHz", "ebmacs1234567890");
   
   #if (DEBUG == true && DEBUG_SERVER == true)
     Serial.println("[Server] Initialized");
@@ -196,16 +194,17 @@ void routes() {
 }
 
 void startServer() {
+//  WiFi.disconnect();
   WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
   WiFi.softAP(apName, apPass);
   delay(1000);
   dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
   dnsServer.start(53, "*", WiFi.softAPIP());
-  #if (DEBUG == true)
-    server.addHandler(new CaptiveRequestHandler());
-  #else
+//  #if (DEBUG == true)
+//    server.addHandler(new CaptiveRequestHandler());
+//  #else
     server.addHandler(new CaptiveRequestHandler()).setFilter(ON_AP_FILTER);
-  #endif
+//  #endif
   DefaultHeaders::Instance().addHeader(F("Access-Control-Allow-Origin"), F("*"));
   DefaultHeaders::Instance().addHeader(F("Access-Control-Allow-Headers"), F("content-type"));
   server.begin();

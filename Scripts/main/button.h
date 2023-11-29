@@ -24,13 +24,19 @@ class Button {
           m_lastState = m_state;
           m_state = pinVal;
           m_changed = (m_state != m_lastState);
-          if (m_changed) m_lastChange = ms;
+          if (m_changed) {
+            m_lastChange = ms;
+            if(m_state)
+              Serial.println("[Button] pressed");
+            else
+              Serial.println("[Button] released");
+          }
       }
       m_time = ms;
       return m_state;
     }
     bool pressedFor(uint32_t ms) {
-      return m_state && m_time - m_lastChange >= ms;
+      return m_state && millis() - m_lastChange >= ms;
     }
     // bool isPressed();
     // bool isReleased();

@@ -130,6 +130,8 @@ typedef enum : uint8_t {
 char wifiName[30];
 char wifiPass[30];
 
+bool forceReconnect = true;
+
 unsigned long connectionStartTime = 0;
 const uint16_t  RETRY_AFTER = 20000; // time in milli seconds
 

@@ -1,5 +1,6 @@
 #include "config.h"
 #include <WiFi.h>
+#include <ESPmDNS.h>
 #include "webpages.h"
 #include <AsyncTCP.h>
 #include <DNSServer.h>
@@ -14,6 +15,8 @@ internet_status_t internetStatus = INTERNET_DISCONNECTED;
 internet_errors_t internetErrors = ERROR_NONE;
 
 void routes();
+void startServer();
+
 
 void internetCallback(WiFiEvent_t event) {
   if(event == ARDUINO_EVENT_WIFI_STA_CONNECTED) {
@@ -30,13 +33,13 @@ void internetCallback(WiFiEvent_t event) {
   }
   else if(event == ARDUINO_EVENT_WIFI_AP_STACONNECTED) {
     #if(DEBUG == true && DEBUG_SERVER == true)
-      Serial.printf("[Internet] AP client connected\n");
+      Serial.printf("[Advance Server] AP client connected\n");
     #endif
     isClientConnected = true;
   }
   else if(event == ARDUINO_EVENT_WIFI_AP_STADISCONNECTED) {
     #if(DEBUG == true && DEBUG_SERVER == true)
-      Serial.printf("[Internet] AP client disconnected\n");
+      Serial.printf("[Advance Server] AP client disconnected\n");
     #endif
     isClientConnected = false;
   }
@@ -44,54 +47,51 @@ void internetCallback(WiFiEvent_t event) {
     strcpy(scanResult, "[");
     int n = WiFi.scanComplete();
     if(n && n != -2) {
-      for (int i=0; i<n; ++i)
-        strcpy(scanResult, ("\"" + WiFi.SSID(i) + "\"").c_str());
-        if(i>0 && i != (n-1)) {
-          strcpy(scanResult, ",");
-        }
+      for (int i=0; i<n; ++i) {
+        strcat(scanResult, ("\"" + WiFi.SSID(i) + "\",").c_str());
+      }
       WiFi.scanDelete();
     }
-    strcpy(scanResult, "]");
+    scanResult[strlen(scanResult)-1] = ']';
     #if(DEBUG == true && DEBUG_SERVER == true)
-      Serial.printf("[Advance Server] Scan complete %s\n", scanResult);
+      Serial.printf("[Advance Server] Scan complete: %s\n", scanResult);
     #endif
   }
 }
 
-void internetDisconnectCallback(WiFiEvent_t event, WiFiEventInfo_t info) {
-  uint8_t res = info.disconnected.reason;
-  if(res == 15 || res == 202) {
-    Serial.printf("[Advance Server] Authentication failed - Invalid password\n");
-    strcpy(wifiConncetionError, "Authentication failed - Invalid password");
-  }
-  else if(res == 201) {
-    Serial.printf("[Advance Server] WiFi is not in range\n");
-    strcpy(wifiConncetionError, "WiFi is not in range");
-  }
-  else if(res == 3) {
-    Serial.printf("[Advance Server] WiFi is not answering\n");
-    strcpy(wifiConncetionError, "WiFi is not answering");
-  }
-  else {
-    strcpy(wifiConncetionError, "Unknown reason");
-    #if(DEBUG == true && DEBUG_SERVER == true)
-      Serial.printf("[Advance Server] Unknown reason\n");
-    #endif
-  }
-  #if(DEBUG == true && DEBUG_SERVER == true)
-    Serial.printf("[Advance Server] Disconnected\n");
-  #endif
-  wifiConnected = false;
-}
-
+// void internetDisconnectCallback(WiFiEvent_t event, wifi_err_reason_t info) {
+//   uint8_t res = info
+//   if(res == 15 || res == 202) {
+//     Serial.printf("[Advance Server] Authentication failed - Invalid password\n");
+//     strcpy(wifiConncetionError, "Authentication failed - Invalid password");
+//   }
+//   else if(res == 201) {
+//     Serial.printf("[Advance Server] WiFi is not in range\n");
+//     strcpy(wifiConncetionError, "WiFi is not in range");
+//   }
+//   else if(res == 3) {
+//     Serial.printf("[Advance Server] WiFi is not answering\n");
+//     strcpy(wifiConncetionError, "WiFi is not answering");
+//   }
+//   else {
+//     strcpy(wifiConncetionError, "Unknown reason");
+//     #if(DEBUG == true && DEBUG_SERVER == true)
+//       Serial.printf("[Advance Server] Unknown reason\n");
+//     #endif
+//   }
+//   #if(DEBUG == true && DEBUG_SERVER == true)
+//     Serial.printf("[Advance Server] Disconnected\n");
+//   #endif
+//   wifiConnected = false;
+// }
 
 
 void connectWiFi() {
-  if(len(wifiName) > 0) {
+  if(strlen(wifiName) > 0) {
     #if (DEBUG == true && DEBUG_SERVER == true)
       Serial.printf("[Advance Server] Connecting to WiFi %s\n", wifiName);
     #endif
-    WiFI.begin(wifiName, wifiPass);
+    WiFi.begin(wifiName, wifiPass);
   }
   connectionStartTime = millis();
 }
@@ -100,8 +100,9 @@ void connectWiFi() {
 
 void serverLoop() {
   if(!wifiConnected) {
-    if(internetStatus == INTERNET_CONNECTING) {
+    if(internetStatus != INTERNET_CONNECTED || forceReconnect) {
       if(millis() - connectionStartTime >= RETRY_AFTER) {
+        forceReconnect = false;
         connectWiFi();
       }
     }
@@ -118,7 +119,8 @@ void initServer() {
   
   WiFi.mode(WIFI_MODE_APSTA);
   WiFi.onEvent(internetCallback);
-  WiFi.onEvent(internetDisconnectCallback, SYSTEM_EVENT_STA_DISCONNECTED);
+  // WiFi.onEvent(internetDisconnectCallback, SYSTEM_EVENT_STA_DISCONNECTED);
+
   
   String mac = WiFi.macAddress();
   mac.replace(":","");
@@ -148,7 +150,7 @@ public:
       request->redirect("http://8.8.8.8/");
     }
     else
-      request->send(SPIFFS, "/index.html");
+      request->send_P(200, "text/html", HTML);
   }
 };
 
@@ -161,65 +163,75 @@ void routes() {
   server.on("/jquery.js", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/javascript", JS);
   });
-  server.on("/connect_wifi",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total){
+  server.on("/connect-wifi",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total){
     String rec;
     for(int i=0; i<len; i++)
       rec += (char)data[i];
     request->send(200, "text/plain", "ok");
     uint8_t index1 = rec.indexOf(',', 0);
-    Serial.println(rec.substring(0,index1));
-    Serial.println(rec.substring(index1+1,len));
+
+    strcpy(wifiName, (rec.substring(0,index1)).c_str());
+    strcpy(wifiPass, rec.substring(index1+1,len).c_str());
+    WiFi.disconnect();
+    if(strlen(wifiName) > 0)
+      forceReconnect = true;
+    request->send(200, "text/plain", "Ok");
   });
 
-  server.on("/scan_wifi",HTTP_GET,[](AsyncWebServerRequest * request){
+  server.on("/scan-wifi",HTTP_GET,[](AsyncWebServerRequest * request){
     #if(DEBUG == true && DEBUG_SERVER == true)
-      Serial.printf("[Advance Server] Scanning\n");
+      Serial.printf("[Advance Server] Scanning for nearby WiFi\n");
     #endif
-    request->send(200, "text/plain", "ok");
+    request->send(200, "text/plain", "Ok");
     WiFi.scanNetworks(true);
   });
 
 
-  server.on("/get_scan_result",HTTP_GET,[](AsyncWebServerRequest * request){
+  server.on("/scan-result",HTTP_GET,[](AsyncWebServerRequest * request){
     request->send(200, "text/plain", scanResult);
   });
   
-  server.on("/connection_status",HTTP_GET,[](AsyncWebServerRequest * request) {
+  server.on("/connection-status",HTTP_GET,[](AsyncWebServerRequest * request) {
     char InternetConnectionStatus[100];
     strcpy(InternetConnectionStatus, "{\"wifi\":\"");
     if(wifiConnected) {
-      strcpy(InternetConnectionStatus, "1\"");
+      strcat(InternetConnectionStatus, "1\"");
     }
     else {
-      strcpy(InternetConnectionStatus, "0\",\"e\":\"");
-      strcpy(InternetConnectionStatus, wifiConncetionError);
+      strcat(InternetConnectionStatus, "0\",\"e\":\"");
+      strcat(InternetConnectionStatus, wifiConncetionError);
     }
-    strcpy(InternetConnectionStatus, ",\"eth\":\"");
+    strcat(InternetConnectionStatus, ",\"eth\":\"");
     if(ethernetConnected) {
-      strcpy(InternetConnectionStatus, "1\"");
+      strcat(InternetConnectionStatus, "1\"");
     }
     else {
-      strcpy(InternetConnectionStatus, "0\",\"e\":\"");
-      strcpy(InternetConnectionStatus, enternetConncetionError);
+      strcat(InternetConnectionStatus, "0\",\"e\":\"");
+      strcat(InternetConnectionStatus, enternetConncetionError);
+      strcat(InternetConnectionStatus, "\"}");
     }
-      
     request->send(200, "text/plain", InternetConnectionStatus);
-  }
+  });
 }
 
 
 void startServer() {
+  WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
+  WiFi.softAP(apName, apPass);
   dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
   dnsServer.start(53, "*", WiFi.softAPIP());
   server.addHandler(new CaptiveRequestHandler()).setFilter(ON_AP_FILTER);
   DefaultHeaders::Instance().addHeader(F("Access-Control-Allow-Origin"), F("*"));
   DefaultHeaders::Instance().addHeader(F("Access-Control-Allow-Headers"), F("content-type"));
+  server.begin();
   #if (DEBUG == true && DEBUG_SERVER == true)
-    Serial.println("[Advance Server] Start");
+    Serial.println("[Advance Server] Started");
   #endif
 }
 
 void closeServer() {
+  server.end();
+  server.reset();
   #if (DEBUG == true && DEBUG_SERVER == true)
     Serial.println("[Advance Server] Closed");
   #endif

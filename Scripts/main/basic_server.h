@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <DNSServer.h>
+#include "basic_webpages.h"
 #include <ESPAsyncWebServer.h>
 
 IPAddress apIP(8,8,8,8);
@@ -78,11 +79,24 @@ void initServer() {
 
 
 void routes() {
-  server.on("/assets/<filename>", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(SPIFFS, request->url(), "text/javascript");
+//  server.on("/assets/<filename>", HTTP_GET, [](AsyncWebServerRequest *request) {
+//    request->send(SPIFFS, request->url(), "text/javascript");
+//  });
+//  
+//  server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
+
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send_P(200, "text/html", HTML);
   });
-  
-  server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
+  server.on("/assets/index-14a8d5d7.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send_P(200, "text/css", CSS);
+  });
+  server.on("/assets/index-0360db09.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send_P(200, "text/javascript", JS);
+  });
+  server.on("/digi-lock-ico.svg", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send_P(200, "image/svg+xml", ICON);
+  });
   
   server.on("/get-users", HTTP_GET, [](AsyncWebServerRequest *request) {
     #if (DEBUG == true && DEBUG_SERVER == true)
@@ -200,11 +214,7 @@ void startServer() {
   delay(1000);
   dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
   dnsServer.start(53, "*", WiFi.softAPIP());
-//  #if (DEBUG == true)
-//    server.addHandler(new CaptiveRequestHandler());
-//  #else
-    server.addHandler(new CaptiveRequestHandler()).setFilter(ON_AP_FILTER);
-//  #endif
+  server.addHandler(new CaptiveRequestHandler()).setFilter(ON_AP_FILTER);
   DefaultHeaders::Instance().addHeader(F("Access-Control-Allow-Origin"), F("*"));
   DefaultHeaders::Instance().addHeader(F("Access-Control-Allow-Headers"), F("content-type"));
   server.begin();

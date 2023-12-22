@@ -4,7 +4,7 @@
   2 -> DL1500 Wi-Fi
   3 -> DL2000
 */
-#define LOCK_TYPE 2
+#define LOCK_TYPE 0
 
 #define DEBUG     		true  // false will disable all debug logs
 #define DEBUG_RTC     false // false will only disable RTC related logs 

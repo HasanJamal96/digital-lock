@@ -40,12 +40,6 @@ Led    keypadLed   (KEYPAD_LED_PIN);
 Relay  relay       (RELAY_PIN, RELAY_LED_PIN);
 Keypad keypad      (makeKeymap(keys), KEYPAD_R_PINS, KEYPAD_C_PINS, ROWS, COLS);
 
-#if (LOCK_TYPE < 2)
-  #include "basic_server.h"  // For DL100 and DL1500 Timer
-#else
-  #include "advance_server.h"  // For other than DL100 and DL1500 Timer
-#endif
-
 #if (LOCK_TYPE > 0) // For other than DL100
   #include "schedule.h"
   #include "rtc.h"
@@ -53,6 +47,14 @@ Keypad keypad      (makeKeymap(keys), KEYPAD_R_PINS, KEYPAD_C_PINS, ROWS, COLS);
   MyRtc         rtc;
   ScheduleClass schedular;
 #endif
+
+
+#if (LOCK_TYPE < 2)
+  #include "basic_server.h"  // For DL100 and DL1500 Timer
+#else
+  #include "advance_server.h"  // For other than DL100 and DL1500 Timer
+#endif
+
 
 
 
@@ -193,12 +195,16 @@ void populateSystemInfo() {
 
 void turnBacklight(bool on) {
   if(on) {
-    backLightState = true;
-    keypadLed.on();
+    if(!backLightState) {
+      backLightState = true;
+      keypadLed.on();
+    }
   }
   else {
-    backLightState = false;
-    keypadLed.off();
+    if(backLightState) {
+      backLightState = false;
+      keypadLed.off();
+    }
   }
 }
 
@@ -242,6 +248,7 @@ void watchKeypad() {
     for(uint8_t i=0; i<LIST_MAX; i++) {
       if(keypad.key[i].stateChanged ) {
         const char k = keypad.key[i].kchar;
+        // Serial.println(k);
         switch (keypad.key[i].kstate) {
           case PRESSED:
             buzzer.shortBeep();
@@ -645,12 +652,14 @@ void deviceModeLoop() {
         deviceStateChangeAt = millis();
         deviceState = WAIT_PROGRAMING_CODE;
         currentPassLength = PROGRAM_ACCESS_CODE_LEN;
+        emptyPassCode();
         buzzer.twoNormalBeeps();
         #if (DEBUG == true)
           Serial.println("[Main] Device mode is changed to WAIT_PROGRAMING_CODE");
         #endif
       }
       else {
+        emptyPassCode();
         changeModeToNormal();
       }
       cancelState = false;
@@ -661,7 +670,10 @@ void deviceModeLoop() {
 
 void timedParameters() {
   bool btnState = resetButton.read();
-  if(sleepMode && backLightState) {
+  if(!sleepMode) {
+    turnBacklight(true);
+  }
+  else if(backLightState) {
     if(millis() - lastKeyPressed >= BACKLIGHT_OFF_AFTER) {
        turnBacklight(false);
     }
@@ -763,7 +775,6 @@ void relayFunctionsForServer(uint8_t x) {
       break;
   }
 }
-
 
 
 void loop() {

@@ -1,3 +1,4 @@
+#include "ArduinoJson/Json/JsonSerializer.hpp"
 #include "config.h"
 #include <WiFi.h>
 #include <AsyncTCP.h>
@@ -70,6 +71,9 @@ void initServer() {
   #endif
   
   WiFi.mode(WIFI_MODE_APSTA);
+  WiFi.begin("EBMACS-2.4GHz", "ebmacs1234567890");
+  delay(6000);
+  Serial.println(WiFi.localIP());
   WiFi.onEvent(apConnectionCallback);
   
   #if (DEBUG == true && DEBUG_SERVER == true)
@@ -88,10 +92,10 @@ void routes() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send_P(200, "text/html", HTML);
   });
-  server.on("/assets/index-14a8d5d7.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/assets/index-7edf4032.css", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send_P(200, "text/css", CSS);
   });
-  server.on("/assets/index-0360db09.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/assets/index-d58f8346.js", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send_P(200, "text/javascript", JS);
   });
   server.on("/digi-lock-ico.svg", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -115,7 +119,7 @@ void routes() {
     request->send(response);
   });
   
-  server.on("/update-system-info",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total){
+  server.on("/update-system-info",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
     String rec = "";
     for(int i=0; i<len; i++)
       rec += (char)data[i];
@@ -130,7 +134,7 @@ void routes() {
     else
       request->send(200, "application/json", JSON_PARSE_ERROR);
   });
-  server.on("/new-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total){
+  server.on("/new-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
     String rec = "";
     for(int i=0; i<len; i++)
       rec += (char)data[i];
@@ -145,7 +149,7 @@ void routes() {
     else
       request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"unable to add new user\"}");
   });
-  server.on("/delete-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total){
+  server.on("/delete-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
     String rec = "";
     for(int i=0; i<len; i++)
       rec += (char)data[i];
@@ -160,7 +164,7 @@ void routes() {
     else
       request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"user not found\"}");
   });
-  server.on("/update-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total){
+  server.on("/update-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
     String rec = "";
     for(int i=0; i<len; i++)
       rec += (char)data[i];
@@ -175,7 +179,7 @@ void routes() {
     else
       request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"user not found\"}");
   });
-  server.on("/change-state",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total){
+  server.on("/change-state",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
     String rec = "";
     for(int i=0; i<len; i++)
       rec += (char)data[i];
@@ -194,6 +198,25 @@ void routes() {
       request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"invalid state\"}");
     }
   });
+  #if (LOCK_TYPE > 0)
+    server.on("/set-time",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
+    String rec = "";
+    for(int i=0; i<len; i++)
+      rec += (char)data[i];
+    DynamicJsonDocument serverData(50);
+    DeserializationError error = deserializeJson(serverData, rec);
+    if(error) {
+      request->send(200, "application/json", JSON_PARSE_ERROR);
+      return;
+    }
+    const uint64_t unixTime = serverData["millis"];
+    
+    if(rtc.setRtcTime(unixTime/1000))
+      request->send(200, "application/json", successMsg);
+    else
+      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"RTC not working\"}");
+    });
+  #endif
   server.on("/get-state", HTTP_GET, [](AsyncWebServerRequest *request) {
     if(relay.status()) {
       request->send(200, "application/json", "{\"success\":\"1\",\"s\":\"1\"}");

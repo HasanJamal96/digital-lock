@@ -4,10 +4,10 @@
   2 -> DL1500 Wi-Fi
   3 -> DL2000
 */
-#define LOCK_TYPE 0
+#define LOCK_TYPE 1
 
 #define DEBUG     		true  // false will disable all debug logs
-#define DEBUG_RTC     false // false will only disable RTC related logs 
+#define DEBUG_RTC     true  // false will only disable RTC related logs 
 #define DEBUG_MEMORY  true  // false will only disable Memory related logs
 #define DEBUG_SERVER  true  // false will only disable Server related logs
 
@@ -33,7 +33,7 @@
 
 #define PROG_PASSWORD     "000000"    // should be equal to 6 characters
 #define RELAY_FUNCTION    1           // as shown above
-#define MOMENTARY_DELAY   2000        // time in milli seconds
+#define MOMENTARY_DELAY   2           // time in seconds
 #define LIMIT_USE         0           // 0-> Off, 1->On
 #define USER_NAME         ""          // should be less than 20 characters
 #define CODE_LENGTH       4

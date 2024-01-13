@@ -10,7 +10,7 @@ class MyRtc {
         Serial.println("[RTC] Initializing");
       #endif
       _working = rtc.begin();
-      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+      // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
       DateTime now = rtc.now();
         
       int h = now.hour();
@@ -33,11 +33,32 @@ class MyRtc {
       #endif
       return _working;
     }
+
+    #if (DEBUG == true && DEBUG_RTC == true)
+      void printTime() {
+        DateTime now = rtc.now();
+          if(_working) 
+            Serial.printf("[RTC] Current set time is: %d/%d/%d %d-%d-%d\n", now.year(), now.month(), now.day(), now.hour(), now.minute(), now.second());
+          else
+            Serial.println("[RTC] Not working");
+      }
+    #endif
     
 
     void setRtcTime(uint8_t h, uint8_t m, uint8_t s, uint8_t d, uint8_t mon, uint8_t y) {
       _forceSync = true;
       rtc.adjust(DateTime(y, mon, d, h, m, s));
+    }
+
+    bool setRtcTime(uint32_t t) {
+      if(_working) {
+        _forceSync = true;
+        rtc.adjust(DateTime(t));
+        return true;
+      }
+      else  {
+        return false;
+      }
     }
     
     

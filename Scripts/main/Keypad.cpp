@@ -7,11 +7,12 @@ Keypad::Keypad(char *userKeymap, byte *row, byte *col, byte numRows, byte numCol
 	sizeKpd.rows = numRows;
 	sizeKpd.columns = numCols;
 
-	begin(userKeymap);
+	// begin(userKeymap);
+  keymap = userKeymap;
 
-	setDebounceTime(10);
-	setHoldTime(500);
-	keypadEventListener = 0;
+	// setDebounceTime(10);
+	// setHoldTime(500);
+	// keypadEventListener = 0;
 
 	startTime = 0;
 	single_key = false;
@@ -23,20 +24,20 @@ Keypad::Keypad(char *userKeymap, byte *row, byte *col, byte numRows, byte numCol
   }
 }
 
-void Keypad::begin(char *userKeymap) {
-    keymap = userKeymap;
-}
+// void Keypad::begin(char *userKeymap) {
+//     keymap = userKeymap;
+// }
 
-char Keypad::getKey() {
-	single_key = true;
+// char Keypad::getKey() {
+// 	single_key = true;
 
-	if (getKeys() && key[0].stateChanged && (key[0].kstate==PRESSED))
-		return key[0].kchar;
+// 	if (getKeys() && key[0].stateChanged && (key[0].kstate==PRESSED))
+// 		return key[0].kchar;
 	
-	single_key = false;
+// 	single_key = false;
 
-	return NO_KEY;
-}
+// 	return NO_KEY;
+// }
 
 // Populate the key list.
 bool Keypad::getKeys() {
@@ -115,18 +116,18 @@ void Keypad::nextKeyState(byte idx, boolean button) {
 
 	switch (key[idx].kstate) {
 		case IDLE:
-			if (button==CLOSED) {
+			if (button==KEY_CLOSED) {
 				transitionTo (idx, PRESSED);
 				holdTimer = millis(); }		// Get ready for next HOLD state.
 			break;
 		case PRESSED:
 			if ((millis()-holdTimer)>holdTime)	// Waiting for a key HOLD...
 				transitionTo (idx, HOLD);
-			else if (button==OPEN)				// or for a key to be RELEASED.
+			else if (button==KEY_OPEN)				// or for a key to be RELEASED.
 				transitionTo (idx, RELEASED);
 			break;
 		case HOLD:
-			if (button==OPEN)
+			if (button==KEY_OPEN)
 				transitionTo (idx, RELEASED);
 			break;
 		case RELEASED:
@@ -135,24 +136,24 @@ void Keypad::nextKeyState(byte idx, boolean button) {
 	}
 }
 
-bool Keypad::isPressed(char keyChar) {
-	for (byte i=0; i<LIST_MAX; i++) {
-		if ( key[i].kchar == keyChar ) {
-			if ( (key[i].kstate == PRESSED) && key[i].stateChanged )
-				return true;
-		}
-	}
-	return false;	// Not pressed.
-}
+// bool Keypad::isPressed(char keyChar) {
+// 	for (byte i=0; i<LIST_MAX; i++) {
+// 		if ( key[i].kchar == keyChar ) {
+// 			if ( (key[i].kstate == PRESSED) && key[i].stateChanged )
+// 				return true;
+// 		}
+// 	}
+// 	return false;	// Not pressed.
+// }
 
-int Keypad::findInList (char keyChar) {
-	for (byte i=0; i<LIST_MAX; i++) {
-		if (key[i].kchar == keyChar) {
-			return i;
-		}
-	}
-	return -1;
-}
+// int Keypad::findInList (char keyChar) {
+// 	for (byte i=0; i<LIST_MAX; i++) {
+// 		if (key[i].kchar == keyChar) {
+// 			return i;
+// 		}
+// 	}
+// 	return -1;
+// }
 
 int Keypad::findInList (int keyCode) {
 	for (byte i=0; i<LIST_MAX; i++) {
@@ -163,48 +164,48 @@ int Keypad::findInList (int keyCode) {
 	return -1;
 }
 
-char Keypad::waitForKey() {
-	char waitKey = NO_KEY;
-	while( (waitKey = getKey()) == NO_KEY );	// Block everything while waiting for a keypress.
-	return waitKey;
-}
+// char Keypad::waitForKey() {
+// 	char waitKey = NO_KEY;
+// 	while( (waitKey = getKey()) == NO_KEY );	// Block everything while waiting for a keypress.
+// 	return waitKey;
+// }
 
-KeyState Keypad::getState() {
-	return key[0].kstate;
-}
+// KeyState Keypad::getState() {
+// 	return key[0].kstate;
+// }
 
 bool Keypad::keyStateChanged() {
 	return key[0].stateChanged;
 }
 
-byte Keypad::numKeys() {
-	return sizeof(key)/sizeof(Key);
-}
+// byte Keypad::numKeys() {
+// 	return sizeof(key)/sizeof(Key);
+// }
 
-void Keypad::setDebounceTime(uint debounce) {
-	debounce<1 ? debounceTime=1 : debounceTime=debounce;
-}
+// void Keypad::setDebounceTime(uint debounce) {
+// 	debounce<1 ? debounceTime=1 : debounceTime=debounce;
+// }
 
-void Keypad::setHoldTime(uint hold) {
-    holdTime = hold;
-}
+// void Keypad::setHoldTime(uint hold) {
+//     holdTime = hold;
+// }
 
-void Keypad::addEventListener(void (*listener)(char)){
-	keypadEventListener = listener;
-}
+// void Keypad::addEventListener(void (*listener)(char)){
+// 	keypadEventListener = listener;
+// }
 
 void Keypad::transitionTo(byte idx, KeyState nextState) {
 	key[idx].kstate = nextState;
 	key[idx].stateChanged = true;
 
-	if (single_key)  {
-	  	if ( (keypadEventListener!=NULL) && (idx==0) )  {
-			keypadEventListener(key[0].kchar);
-		}
-	}
-	else {
-	  	if (keypadEventListener!=NULL)  {
-			keypadEventListener(key[idx].kchar);
-		}
-	}
+	// if (single_key)  {
+	//   	if ( (keypadEventListener!=NULL) && (idx==0) )  {
+	// 		keypadEventListener(key[0].kchar);
+	// 	}
+	// }
+	// else {
+	//   	if (keypadEventListener!=NULL)  {
+	// 		keypadEventListener(key[idx].kchar);
+	// 	}
+	// }
 }

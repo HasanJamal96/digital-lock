@@ -30,17 +30,25 @@ uint8_t selectedFunction = 0;
 int userId = -1;
 
 /*
+  Total Pins
+    Input/Output = 15, 2, 4, 16, 17, 18, 19, 21, 22, 23, 13, 12, 14, 27, 26, 33, 32
+    Input only   = 34, 35, 36, 39
+  
+  Extra Pins
+    15, 16, 17
+
   SPI Pins - Ethernet shield
-  5, 18, 19, 23
+    5, 18, 19, 23
   
   I2C Pins
-  21, 22
+    21, 22
 */
 const uint8_t RELAY_PIN		     = 27;
+const uint8_t RELAY_LED_PIN    = 26;
 const uint8_t BUZZER_PIN       = 4;
 const uint8_t RESET_BTN_PIN    = 32;
-const uint8_t RELAY_LED_PIN    = 26;
 const uint8_t EXIT_LED_PIN     = 25;
+const uint8_t EXIT_INPUT_PIN   = 2;
 const uint8_t KEYPAD_LED_PIN   = 33;
 
 
@@ -138,9 +146,12 @@ const uint16_t  RETRY_AFTER = 20000; // time in milli seconds
 char scanResult[200];
 char deviceIdForServer[20];
 
-bool wifiConnected = false;
+bool wifiConnected  = false;
+bool wifiConnecting = false;
 bool ethernetConnected = false;
 char enternetConncetionError[50];
 char wifiConncetionError[50];
+
+bool isWebsocketConnected = false;
 
 #endif

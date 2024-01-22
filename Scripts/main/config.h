@@ -23,6 +23,7 @@
 // LATCH     = 2
 // UNLATCH   = 3
 // TOGGLE    = 4
+// SCHEDULED = 5
 
 
 // Default values
@@ -49,8 +50,14 @@
 
 #if (LOCK_TYPE == 0)
   #define MAX_SUPPORTED_USERS  100
-#elif (LOCK_TYPE < 2)
+#elif (LOCK_TYPE == 1)
   #define MAX_SUPPORTED_USERS  1000
 #else
   #define MAX_SUPPORTED_USERS  10000
+#endif
+
+
+#if (LOCK_TYPE > 1)
+  #define WEBSOCKET_IP    192.168.18.110
+  #define WEBSOCKET_PORT  80
 #endif

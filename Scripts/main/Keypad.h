@@ -20,8 +20,8 @@ do {							 \
 #endif
 
 
-#define OPEN LOW
-#define CLOSED HIGH
+#define KEY_OPEN LOW
+#define KEY_CLOSED HIGH
 
 typedef char KeypadEvent;
 typedef unsigned int uint;
@@ -51,17 +51,17 @@ public:
 	Key key[LIST_MAX];
 	unsigned long holdTimer;
 
-	char getKey();
+	// char getKey();
 	bool getKeys();
 	KeyState getState();
-	void begin(char *userKeymap);
-	bool isPressed(char keyChar);
-	void setDebounceTime(uint);
-	void setHoldTime(uint);
-	void addEventListener(void (*listener)(char));
-	int findInList(char keyChar);
+	// void begin(char *userKeymap);
+	// bool isPressed(char keyChar);
+	// void setDebounceTime(uint);
+	// void setHoldTime(uint);
+	// void addEventListener(void (*listener)(char));
+	// int findInList(char keyChar);
 	int findInList(int keyCode);
-	char waitForKey();
+	// char waitForKey();
 	bool keyStateChanged();
 	byte numKeys();
 
@@ -71,15 +71,15 @@ private:
   byte *rowPins;
   byte *columnPins;
 	KeypadSize sizeKpd;
-	uint debounceTime;
-	uint holdTime;
+	uint debounceTime = 10;
+	uint holdTime = 500;
 	bool single_key;
 
 	void scanKeys();
 	bool updateList();
 	void nextKeyState(byte n, boolean button);
 	void transitionTo(byte n, KeyState nextState);
-	void (*keypadEventListener)(char);
+	// void (*keypadEventListener)(char);
 };
 
 #endif

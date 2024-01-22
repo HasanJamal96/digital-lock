@@ -1,40 +1,44 @@
- /*
-   # External Libraries used in this project, have to install manually
-     (1.1.1)  AsyncTCP.h              https://github.com/me-no-dev/AsyncTCP
-     (6.21.2) ArduinoJson.h           https://arduinojson.org/
-     (1.2.3)  ESPAsyncWebServer.h     https://github.com/me-no-dev/ESPAsyncWebServer
-     (2.0.2)  Ethernet.h              https://github.com/arduino-libraries/Ethernet
-     (1.6.1)  TimeLib.h               https://github.com/PaulStoffregen/Time
-     (2.1.3)  RTClib.h                https://github.com/adafruit/RTClib
-     (1.14.5) Adafruit_BusIO          https://github.com/adafruit/Adafruit_BusIO/tree/master
- */
+/*
+  # External Libraries used in this project, have to install manually
+    (1.1.1)  AsyncTCP.h              https://github.com/me-no-dev/AsyncTCP
+    (6.21.2) ArduinoJson.h           https://arduinojson.org/
+    (1.2.3)  ESPAsyncWebServer.h     https://github.com/me-no-dev/ESPAsyncWebServer
+    (2.0.2)  Ethernet.h              https://github.com/arduino-libraries/Ethernet
+    (1.6.1)  TimeLib.h               https://github.com/PaulStoffregen/Time
+    (2.1.3)  RTClib.h                https://github.com/adafruit/RTClib
+    (1.14.5) Adafruit_BusIO          https://github.com/adafruit/Adafruit_BusIO/tree/master
+    (1.6.0)  mWebSockets
+      have to comment these two files completely
+        (WebSocketServer.h, WebSocketServer.cpp)
+*/
 
 
- #include <ArduinoJson.h>
+#include <ArduinoJson.h>
 
- StaticJsonDocument<8192> usersInfo;
- StaticJsonDocument<512> systemInfo;
- StaticJsonDocument<256> newUser;
+StaticJsonDocument<8192> usersInfo;
+StaticJsonDocument<512> systemInfo;
+StaticJsonDocument<256> newUser;
 
 
 
- #include "config.h"
- #include "variables.h"
- #include "buzzer.h"
- #include "leds.h"
- #include "relay.h"
- #include "Keypad.h"
- #include "memory.h"
- #include "button.h"
+#include "config.h"
+#include "variables.h"
+#include "buzzer.h"
+#include "leds.h"
+#include "relay.h"
+#include "Keypad.h"
+#include "memory.h"
+#include "button.h"
 
- device_state_t      deviceState = NORMAL;
- programing_step_t   programStep = NONE;
+device_state_t      deviceState = NORMAL;
+programing_step_t   programStep = NONE;
 
 
 
 Memory memory;
 Buzzer buzzer      (BUZZER_PIN);
 Led    exitLed     (EXIT_LED_PIN);
+Button exitInput   (EXIT_INPUT_PIN);
 Button resetButton (RESET_BTN_PIN);
 Led    keypadLed   (KEYPAD_LED_PIN);
 Relay  relay       (RELAY_PIN, RELAY_LED_PIN);
@@ -120,9 +124,11 @@ void matchAdminPasscode() {
 }
 
 
-void removeUser(int id) {
+void removeUser(int id, bool doBuzz = true) {
   usersInfo.remove(id);
-  buzzer.threeShortBeeps();
+  usersInfo.garbageCollect();
+  if(doBuzz)
+    buzzer.threeShortBeeps();
 }
 
 
@@ -147,10 +153,10 @@ void populatePasscode(char k) {
 /*
   {
     "n" : "user's name 19 characters max", -> string
-    "p" : "user's password 19 characters max", -> string
-    "l" : "limited use", -> bool
+    "p" : "user's password 6 characters max", -> string
     "f" : "Relay function", -> uint8_t
-    "o" : "Momentary on time in milli seconds ", -> uint32_t
+    "o" : "Momentary on time in seconds ", -> uint32_t
+    "l" : "limited use", -> bool
     "a" : "number of times code used", -> uint16_t
     "ma": "maximum number of time allowed to use code", -> uin16_t
     "s" : "guest user", -> 0,1
@@ -248,7 +254,6 @@ void watchKeypad() {
     for(uint8_t i=0; i<LIST_MAX; i++) {
       if(keypad.key[i].stateChanged ) {
         const char k = keypad.key[i].kchar;
-        // Serial.println(k);
         switch (keypad.key[i].kstate) {
           case PRESSED:
             buzzer.shortBeep();
@@ -317,40 +322,44 @@ void watchKeypad() {
             }
             break;
           case RELEASED:
-            if(k == '#') {
-              if(!enterState)
-                break;
-              enterState = false;
+            if(k > 47 && k < 58) {
               if(deviceState == NORMAL) {
-                #if (DEBUG == true)
-                  Serial.printf("[Main] Passcode entered: %s\n", passcode);
-                #endif
-                int id = matchUsers(passcode);
-                if(id != -1) {
-                  if(checkUserAllowed(id)) {
-                    const uint8_t rFunc = usersInfo[id]["f"];
-                    switch(rFunc) { // check relay functions
-                      case 1: // Momentary
-                        uint16_t ot;
-                        ot = usersInfo[id]["o"].as<uint16_t>();
-                        relay.momentaryOnFor(ot);
-                        break;
-                      case 2: // Latch
-                        relay.on();
-                        break;
-                      case 3: // Unlatch
-                        relay.off();
-                        break;
-                      case 4: // Toggle
-                        relay.toggle();
-                        break;
-                      default:
-                        break;
+                if(strlen(passcode) >= maxPasscodeLength) {
+                  #if (DEBUG == true)
+                    Serial.printf("[Main] Passcode entered: %s\n", passcode);
+                  #endif
+                  int id = matchUsers(passcode);
+                  if(id != -1) {
+                    if(checkUserAllowed(id)) {
+                      const uint8_t rFunc = usersInfo[id]["f"];
+                      switch(rFunc) { // check relay functions
+                        case 1: // Momentary
+                          uint16_t ot;
+                          ot = usersInfo[id]["o"].as<uint16_t>();
+                          relay.momentaryOnFor(ot);
+                          break;
+                        case 2: // Latch
+                          relay.on();
+                          break;
+                        case 3: // Unlatch
+                          relay.off();
+                          break;
+                        case 4: // Toggle
+                          relay.toggle();
+                          break;
+                        default:
+                          break;
+                      }
                     }
                   }
                 }
               }
-              else if(deviceState == RESET_PASSWORD) {
+            }
+            else if(k == '#') {
+              if(!enterState)
+                break;
+              enterState = false;
+              if(deviceState == RESET_PASSWORD) {
                 deviceState = NORMAL;
                 memory.resetProgramAccess();
                 buzzer.threeShortBeeps();
@@ -545,7 +554,7 @@ void watchKeypad() {
 void removeUserBySchedule(char *code) {
   int id = userExist(code, true);
   if(id != -1) {
-    usersInfo.remove(id);
+    removeUser(id, false);
     memory.updateUsers();
     #if (DEBUG == true)
       Serial.println("[Schedular] User removed");
@@ -580,7 +589,7 @@ void setSchedules() {
     if(isScheduled) {
       const unsigned long expiry = usersInfo[i]["e"];
       if(now() >= expiry) { // remove user if time peroid is already passed
-        usersInfo.remove(i);
+        removeUser(i, false);
         memory.updateUsers();
       }
       else {
@@ -602,6 +611,9 @@ void setup() {
     Serial.begin(BAUDRATE);
     Serial.println("[Main] Setup started");
   #endif
+
+  exitLed.init();
+  exitInput.begin();
   
   buzzer.init();
   keypadLed.init();
@@ -765,18 +777,6 @@ bool updatesByServer() {
 }
 
 
-void relayFunctionsForServer(uint8_t x) {
-  switch(x) {
-    case 0: // off
-      relay.off();
-      break;
-    case 1: // on
-      relay.on();
-      break;
-  }
-}
-
-
 void loop() {
   watchKeypad();
   serverLoop();
@@ -787,21 +787,17 @@ void loop() {
   #if(LOCK_TYPE > 0)
     schedular.delay(100); // check all schedules
   #endif
-}
 
-//#include "variables.h"
-//#include "advance_server.h"
-//
-//
-//void setup() {
-//  Serial.begin(115200);
-//  initServer();
-//  startServer();
-//  strcpy(wifiName, "EBMACS-2.4GHz");
-//  strcpy(wifiPass, "ebmacs1234567890");
-//  strcpy(deviceName, "DL100");
-//}
-//
-//void loop() {
-//  serverLoop();
-//}
+  exitInput.read();
+
+  if(exitInput.isPressed()) {
+    relay.activateByExternalInput();
+    exitLed.on();
+  }
+  else {
+    if(exitInput.isReleased()) {
+      exitLed.off();
+      relay.deactivateByExternalInput();
+    }
+  }
+}

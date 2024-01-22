@@ -78,60 +78,60 @@ public:
   }
 
   // trigger once at given time of day
-  AlarmID_t alarmOnce(time_t value, OnTick_t onTickHandler) {
-    if (value <= 0 || value > SECS_PER_DAY) return dtINVALID_ALARM_ID;
-      return 255;
-    //return create(value, onTickHandler, true, dtDailyAlarm);
-  }
-  AlarmID_t alarmOnce(const int H, const int M, const int S, OnTick_t onTickHandler) {
-    return alarmOnce(AlarmHMS(H,M,S), onTickHandler);
-  }
+  // AlarmID_t alarmOnce(time_t value, OnTick_t onTickHandler) {
+  //   if (value <= 0 || value > SECS_PER_DAY) return dtINVALID_ALARM_ID;
+  //     return 255;
+  //   //return create(value, onTickHandler, true, dtDailyAlarm);
+  // }
+  // AlarmID_t alarmOnce(const int H, const int M, const int S, OnTick_t onTickHandler) {
+  //   return alarmOnce(AlarmHMS(H,M,S), onTickHandler);
+  // }
 
-  // trigger once on a given day and time
-  AlarmID_t alarmOnce(const timeDayOfWeek_t DOW, const int H, const int M, const int S, OnTick_t onTickHandler) {
-    time_t value = (DOW-1) * SECS_PER_DAY + AlarmHMS(H,M,S);
-    if (value <= 0) return dtINVALID_ALARM_ID;
-      return 255;
-    //return create(value, onTickHandler, true, dtWeeklyAlarm);
-  }
+  // // trigger once on a given day and time
+  // AlarmID_t alarmOnce(const timeDayOfWeek_t DOW, const int H, const int M, const int S, OnTick_t onTickHandler) {
+  //   time_t value = (DOW-1) * SECS_PER_DAY + AlarmHMS(H,M,S);
+  //   if (value <= 0) return dtINVALID_ALARM_ID;
+  //     return 255;
+  //   //return create(value, onTickHandler, true, dtWeeklyAlarm);
+  // }
 
-  // trigger daily at given time of day
-  AlarmID_t alarmRepeat(time_t value, OnTick_t onTickHandler) {
-    if (value > SECS_PER_DAY) return dtINVALID_ALARM_ID;
-      return 255;
-    //return create(value, onTickHandler, false, dtDailyAlarm);
-  }
-  AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
-    return alarmRepeat(AlarmHMS(H,M,S), onTickHandler);
-  }
+  // // trigger daily at given time of day
+  // AlarmID_t alarmRepeat(time_t value, OnTick_t onTickHandler) {
+  //   if (value > SECS_PER_DAY) return dtINVALID_ALARM_ID;
+  //     return 255;
+  //   //return create(value, onTickHandler, false, dtDailyAlarm);
+  // }
+  // AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
+  //   return alarmRepeat(AlarmHMS(H,M,S), onTickHandler);
+  // }
 
-  // trigger weekly at a specific day and time
-  AlarmID_t alarmRepeat(const timeDayOfWeek_t DOW, const int H, const int M, const int S, OnTick_t onTickHandler) {
-    time_t value = (DOW-1) * SECS_PER_DAY + AlarmHMS(H,M,S);
-    if (value <= 0) return dtINVALID_ALARM_ID;
-      return 255;
-    //return create(value, onTickHandler, false, dtWeeklyAlarm);
-  }
+  // // trigger weekly at a specific day and time
+  // AlarmID_t alarmRepeat(const timeDayOfWeek_t DOW, const int H, const int M, const int S, OnTick_t onTickHandler) {
+  //   time_t value = (DOW-1) * SECS_PER_DAY + AlarmHMS(H,M,S);
+  //   if (value <= 0) return dtINVALID_ALARM_ID;
+  //     return 255;
+  //   //return create(value, onTickHandler, false, dtWeeklyAlarm);
+  // }
 
-  // trigger once after the given number of seconds
-  AlarmID_t timerOnce(time_t value, OnTick_t onTickHandler) {
-    if (value <= 0) return dtINVALID_ALARM_ID;
-      return 255;
-    //return create(value, onTickHandler, true, dtTimer);
-  }
-  AlarmID_t timerOnce(const int H, const int M, const int S, OnTick_t onTickHandler) {
-    return timerOnce(AlarmHMS(H,M,S), onTickHandler);
-  }
+  // // trigger once after the given number of seconds
+  // AlarmID_t timerOnce(time_t value, OnTick_t onTickHandler) {
+  //   if (value <= 0) return dtINVALID_ALARM_ID;
+  //     return 255;
+  //   //return create(value, onTickHandler, true, dtTimer);
+  // }
+  // AlarmID_t timerOnce(const int H, const int M, const int S, OnTick_t onTickHandler) {
+  //   return timerOnce(AlarmHMS(H,M,S), onTickHandler);
+  // }
 
-  // trigger at a regular interval
-  AlarmID_t timerRepeat(time_t value, OnTick_t onTickHandler) {
-    if (value <= 0) return dtINVALID_ALARM_ID;
-      return 255;
-    //return create(value, onTickHandler, false, dtTimer);
-  }
-  AlarmID_t timerRepeat(const int H,  const int M,  const int S, OnTick_t onTickHandler) {
-    return timerRepeat(AlarmHMS(H,M,S), onTickHandler);
-  }
+  // // trigger at a regular interval
+  // AlarmID_t timerRepeat(time_t value, OnTick_t onTickHandler) {
+  //   if (value <= 0) return dtINVALID_ALARM_ID;
+  //     return 255;
+  //   //return create(value, onTickHandler, false, dtTimer);
+  // }
+  // AlarmID_t timerRepeat(const int H,  const int M,  const int S, OnTick_t onTickHandler) {
+  //   return timerRepeat(AlarmHMS(H,M,S), onTickHandler);
+  // }
 
   void delay(unsigned long ms);
 

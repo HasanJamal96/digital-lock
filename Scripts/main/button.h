@@ -38,8 +38,15 @@ class Button {
     bool pressedFor(uint32_t ms) {
       return m_state && millis() - m_lastChange >= ms;
     }
-    // bool isPressed();
-    // bool isReleased();
+    bool isPressed() {
+      return m_changed && m_state;
+    }
+    bool isReleased() {
+      return m_changed && !m_state;
+    }
+    bool status() {
+      return m_state;
+    }
     // bool wasPressed();
     // bool wasReleased();
 

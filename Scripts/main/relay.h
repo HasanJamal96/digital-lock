@@ -15,12 +15,16 @@ class Relay {
     }
     
     void on() {
+      if(_isExternalTriggerActivate)
+        return;
       digitalWrite(_relayPin, RELAY_ON);
       digitalWrite(_ledPin, LED_ON);
       state = true;
     }
     
     void off() {
+      if(_isExternalTriggerActivate)
+        return;
       digitalWrite(_relayPin, RELAY_OFF);
       digitalWrite(_ledPin, LED_OFF);
       state = false;
@@ -29,6 +33,8 @@ class Relay {
     
     
     void momentaryOnFor(uint32_t ms) {
+      if(_isExternalTriggerActivate)
+        return;
       _momentary = true;
       _onTime = ms * 1000;
       _onAt = millis();
@@ -37,6 +43,8 @@ class Relay {
     
     
     void toggle() {
+      if(_isExternalTriggerActivate)
+        return;
       _momentary = false;
       if(state) {
         off();
@@ -51,10 +59,32 @@ class Relay {
     }
     
     void loop() {
+      if(_isExternalTriggerActivate)
+        return;
       if(_momentary) {
         if(millis() - _onAt >= _onTime) {
           off();
         }
+      }
+    }
+
+    void activateByExternalInput() {
+      on();
+      _isMomentaryPreviously = _momentary;
+      _previousState = state;
+      _momentary = false;
+      _isExternalTriggerActivate = true;
+    }
+
+    void deactivateByExternalInput() {
+      _isExternalTriggerActivate = false;
+      if(_previousState) {
+        if(_isMomentaryPreviously) {
+          _momentary = true;
+        }
+      }
+      else {
+        off();
       }
     }
   
@@ -66,4 +96,7 @@ class Relay {
     unsigned long _onAt = 0;
     bool _momentary = false;
     bool state = false;
+    bool _previousState = false;
+    bool _isMomentaryPreviously = false;
+    bool _isExternalTriggerActivate = false;
 };

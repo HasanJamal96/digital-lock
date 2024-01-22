@@ -71,9 +71,9 @@ void initServer() {
   #endif
   
   WiFi.mode(WIFI_MODE_APSTA);
-  WiFi.begin("EBMACS-2.4GHz", "ebmacs1234567890");
-  delay(6000);
-  Serial.println(WiFi.localIP());
+  // WiFi.begin("EBMACS-2.4GHz", "ebmacs1234567890");
+  // delay(6000);
+  // Serial.println(WiFi.localIP());
   WiFi.onEvent(apConnectionCallback);
   
   #if (DEBUG == true && DEBUG_SERVER == true)
@@ -191,7 +191,14 @@ void routes() {
     }
     const int x = serverData["s"];
     if(x < 2) {
-      relayFunctionsForServer(x);
+      switch(x) {
+        case 0: // off
+          relay.off();
+          break;
+        case 1: // on
+          relay.on();
+          break;
+      }
       request->send(200, "application/json", successMsg);
     }
     else {
@@ -218,12 +225,23 @@ void routes() {
     });
   #endif
   server.on("/get-state", HTTP_GET, [](AsyncWebServerRequest *request) {
+    char msg[50];
+    strcpy(msg, "{\"success\":\"1\",\"s\":\"");
     if(relay.status()) {
-      request->send(200, "application/json", "{\"success\":\"1\",\"s\":\"1\"}");
+      strcat(msg, "1\",\"e\":\"");
     }
     else {
-      request->send(200, "application/json", "{\"success\":\"1\",\"s\":\"0\"}");
+      strcat(msg, "0\",\"e\":\"");
     }
+    if(exitInput.status()) {
+      strcat(msg, "1\"}");
+    }
+    else {
+      strcat(msg, "0\"}");
+    }
+    request->send(200, "application/json", msg);
+    
+
   });
   server.onNotFound([](AsyncWebServerRequest *request) {
     request->send(404);

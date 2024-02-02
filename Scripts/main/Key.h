@@ -1,5 +1,5 @@
-#ifndef Keypadlib_KEY_H_
-#define Keypadlib_KEY_H_
+#ifndef Key_h
+#define Key_h
 
 #include <Arduino.h>
 

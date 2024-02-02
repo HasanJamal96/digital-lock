@@ -1,180 +1,219 @@
 #ifndef schedule_h
 #define schedule_h
-
 #include <Arduino.h>
 #include <TimeLib.h>
 
-#define dtNBR_ALARMS 100
+#define MAX_ALARMS 10
 
-//#define USE_SPECIALIST_METHODS  // define this for testing
 
-typedef enum {
-  dtMillisecond,
-  dtSecond,
-  dtMinute,
-  dtHour,
-  dtDay
-} dtUnits_t;
+typedef void (*OnTick_t)(uint8_t relayFunction);
 
-typedef struct {
-  uint8_t alarmType      :4 ;  // enumeration of daily/weekly
-  uint8_t isEnabled      :1 ;  // the timer is only actioned if isEnabled is true
-  uint8_t isOneShot      :1 ;  // the timer will be de-allocated after trigger is processed
-} AlarmMode_t;
-
-// new time based alarms should be added just before dtLastAlarmType
-typedef enum {
-  dtNotAllocated,
-  dtTimer,
-  dtExplicitAlarm,
-  dtDailyAlarm,
-  dtWeeklyAlarm,
-  dtLastAlarmType
-} dtAlarmPeriod_t ;
-
-// macro to return true if the given type is a time based alarm, false if timer or not allocated
-#define dtIsAlarm(_type_)  (_type_ >= dtExplicitAlarm && _type_ < dtLastAlarmType)
-#define dtUseAbsoluteValue(_type_)  (_type_ == dtTimer || _type_ == dtExplicitAlarm)
-
-typedef uint8_t AlarmID_t;
-typedef AlarmID_t AlarmId;  // Arduino friendly name
-
-#define dtINVALID_ALARM_ID 255
-#define dtINVALID_TIME     (time_t)(-1)
-#define AlarmHMS(_hr_, _min_, _sec_) (_hr_ * SECS_PER_HOUR + _min_ * SECS_PER_MIN + _sec_)
-
-typedef void (*OnTick_t)(char *val);  // alarm callback function typedef
-
-// class defining an alarm instance, only used by dtAlarmsClass
-class AlarmClass {
-public:
-  AlarmClass();
-  OnTick_t onTickHandler;
-  void updateNextTrigger();
-  time_t value;
-  time_t nextTrigger;
-  AlarmMode_t Mode;
-  char myVal[7];
+struct Alarm {
+  uint8_t id = 255;
+  char name[10];
+  time_t startDay;
+  time_t endDay;
+  time_t startTime;
+  time_t endTime;
+  time_t lastActivate;
+  time_t lastDeactivate;
+  uint8_t weekdays;
+  uint8_t functionAtStart;
+  uint8_t functionAtEnd;
 };
 
-// class containing the collection of alarms
-class ScheduleClass {
+
+
+class ScheduleManager {
 private:
-  AlarmClass Alarm[dtNBR_ALARMS];
-  void serviceAlarms();
-  uint8_t isServicing;
-  uint8_t servicedAlarmId; // the alarm currently being serviced
-  AlarmID_t create(time_t value, OnTick_t onTickHandler, uint8_t isOneShot, dtAlarmPeriod_t alarmType, const char *mv);
+  Alarm alarms[MAX_ALARMS];
+  int numAlarms;
 
-public:
-  ScheduleClass();
-  // functions to create alarms and timers
+  OnTick_t _onTickHandler = NULL;
 
-  // trigger once at the given time in the future
-  AlarmID_t triggerOnce(time_t value, OnTick_t onTickHandler, const char *mv) {
-    if (value <= 0) return dtINVALID_ALARM_ID;
-    Serial.println("Creating");
-    return create(value, onTickHandler, true, dtExplicitAlarm, mv);
+  time_t currentTime;
+  time_t seconds;
+  uint8_t dow;
+  bool updated = false;
+
+  uint8_t getFreeIndex() {
+    for(uint8_t i=0; i<MAX_ALARMS; i++) {
+      if(alarms[i].id == 255) {
+        return i;
+      }
+    }
+    return 255;
   }
 
-  // trigger once at given time of day
-  // AlarmID_t alarmOnce(time_t value, OnTick_t onTickHandler) {
-  //   if (value <= 0 || value > SECS_PER_DAY) return dtINVALID_ALARM_ID;
-  //     return 255;
-  //   //return create(value, onTickHandler, true, dtDailyAlarm);
-  // }
-  // AlarmID_t alarmOnce(const int H, const int M, const int S, OnTick_t onTickHandler) {
-  //   return alarmOnce(AlarmHMS(H,M,S), onTickHandler);
-  // }
+  int convert_to_minutes(int hours, int minutes, int seconds) {
+    return (hours * 3600) + (minutes * 60) + seconds;
+  }
 
-  // // trigger once on a given day and time
-  // AlarmID_t alarmOnce(const timeDayOfWeek_t DOW, const int H, const int M, const int S, OnTick_t onTickHandler) {
-  //   time_t value = (DOW-1) * SECS_PER_DAY + AlarmHMS(H,M,S);
-  //   if (value <= 0) return dtINVALID_ALARM_ID;
-  //     return 255;
-  //   //return create(value, onTickHandler, true, dtWeeklyAlarm);
-  // }
+public:
+  bool add(const char *name, time_t startDay, time_t endDay, time_t startTime, time_t endTime, uint8_t w_days, uint8_t functionAtStart, uint8_t functionAtEnd, bool doSave = true) {
+    if (numAlarms < MAX_ALARMS) {
+      uint8_t index = getFreeIndex();
+      if(index != 255) {
+        if(strlen(name) > 0)
+          strcpy(alarms[index].name, name);
+        alarms[index].startDay = startDay;
+        alarms[index].endDay = endDay;
+        alarms[index].startTime = startTime;
+        alarms[index].endTime = endTime;
+        alarms[index].weekdays = w_days;
+        alarms[index].id = index;
+        alarms[index].functionAtStart = functionAtStart;
+        alarms[index].functionAtEnd = functionAtEnd;
+        numAlarms++;
+        if(doSave)
+          updated = true;
+        Serial.printf("[Schedule] Added new at Index %d\n", index);
+        return true;
+      }
+    }
+    return false;
+  }
 
-  // // trigger daily at given time of day
-  // AlarmID_t alarmRepeat(time_t value, OnTick_t onTickHandler) {
-  //   if (value > SECS_PER_DAY) return dtINVALID_ALARM_ID;
-  //     return 255;
-  //   //return create(value, onTickHandler, false, dtDailyAlarm);
-  // }
-  // AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
-  //   return alarmRepeat(AlarmHMS(H,M,S), onTickHandler);
-  // }
+  bool update(uint8_t id, const char *name, time_t startDay, time_t endDay, time_t startTime, time_t endTime, uint8_t w_days, uint8_t functionAtStart, uint8_t functionAtEnd) {
+    if(id != 255) {
+      if(strlen(name) > 0)
+        strcpy(alarms[id].name, name);
+      alarms[id].startDay = startDay;
+      alarms[id].endDay = endDay;
+      alarms[id].startTime = startTime;
+      alarms[id].endTime = endTime;
+      alarms[id].weekdays = w_days;
+      alarms[id].functionAtStart = functionAtStart;
+      alarms[id].functionAtEnd = functionAtEnd;
+      updated = true;
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
 
-  // // trigger weekly at a specific day and time
-  // AlarmID_t alarmRepeat(const timeDayOfWeek_t DOW, const int H, const int M, const int S, OnTick_t onTickHandler) {
-  //   time_t value = (DOW-1) * SECS_PER_DAY + AlarmHMS(H,M,S);
-  //   if (value <= 0) return dtINVALID_ALARM_ID;
-  //     return 255;
-  //   //return create(value, onTickHandler, false, dtWeeklyAlarm);
-  // }
 
-  // // trigger once after the given number of seconds
-  // AlarmID_t timerOnce(time_t value, OnTick_t onTickHandler) {
-  //   if (value <= 0) return dtINVALID_ALARM_ID;
-  //     return 255;
-  //   //return create(value, onTickHandler, true, dtTimer);
-  // }
-  // AlarmID_t timerOnce(const int H, const int M, const int S, OnTick_t onTickHandler) {
-  //   return timerOnce(AlarmHMS(H,M,S), onTickHandler);
-  // }
+  bool remove(uint8_t id) {
+    if(id != 255) {
+      if(alarms[id].id == 255) {
+        return false;
+      }
+      else {
+        alarms[id].id = 255;
+        updated = true;
+        numAlarms--;
+        return true;
+      }
+    }
+    return false;
+  }
 
-  // // trigger at a regular interval
-  // AlarmID_t timerRepeat(time_t value, OnTick_t onTickHandler) {
-  //   if (value <= 0) return dtINVALID_ALARM_ID;
-  //     return 255;
-  //   //return create(value, onTickHandler, false, dtTimer);
-  // }
-  // AlarmID_t timerRepeat(const int H,  const int M,  const int S, OnTick_t onTickHandler) {
-  //   return timerRepeat(AlarmHMS(H,M,S), onTickHandler);
-  // }
+  void getAll(char *buf) {
+    strcpy(buf, "[");
+    for(uint8_t i=0; i<MAX_ALARMS; i++) {
+      if(alarms[i].id != 255) {
+        Alarm a = alarms[i];
+        char localBuf[150];
+        sprintf(localBuf, "{\"id\":%d,\"n\":\"%s\",\"sd\":%lu,\"ed\":%lu,\"st\":%lu,\"et\":%lu,\"wd\":%d,\"sf\":%d,\"ef\":%d},", a.id, a.name, a.startDay, a.endDay, a.startTime, a.endTime, a.weekdays, a.functionAtStart, a.functionAtEnd);
+        strcat(buf, localBuf);
+      }
+    }
+    int len = strlen(buf);
+    if(len > 10) {
+      buf[len-1] = '\0';
+    }
+    strcat(buf, "]");
+  }
 
-  void delay(unsigned long ms);
+  void updateCurrentTimeVariables() {
+    currentTime = now(); // time in unix in seconds
+    seconds = convert_to_minutes(hour(), minute(), second());
+    dow = checkWeekday();
+  }
 
-  // utility methods
-  uint8_t getDigitsNow( dtUnits_t Units) const;         // returns the current digit value for the given time unit
-  void waitForDigits( uint8_t Digits, dtUnits_t Units);
-  void waitForRollover(dtUnits_t Units);
+  bool isUserInLimits(time_t startDay, time_t endDay, time_t startTime, time_t endTime, uint8_t w_days) {
+    updateCurrentTimeVariables();
+    if(currentTime >= startDay) { // run always
+      if(currentTime <= endDay || endDay == 0) {
+        if(dow & w_days) {
+          if(seconds >= startTime && seconds <= endTime) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
 
-  // low level methods
-  void enable(AlarmID_t ID);                // enable the alarm to trigger
-  void disable(AlarmID_t ID);               // prevent the alarm from triggering
-  AlarmID_t getTriggeredAlarmId() const;          // returns the currently triggered  alarm id
-  bool getIsServicing() const;                    // returns isServicing
-  void write(AlarmID_t ID, time_t value);   // write the value (and enable) the alarm with the given ID
-  time_t read(AlarmID_t ID) const;                // return the value for the given timer
-  dtAlarmPeriod_t readType(AlarmID_t ID) const;   // return the alarm type for the given alarm ID
+  void service() {
+    updateCurrentTimeVariables();
+    uint8_t runFunction = 255; // 255 is used as invalid function
+    for(uint8_t i=0; i<MAX_ALARMS; i++) {
+      if(alarms[i].id != 255) {
+        if(currentTime >= alarms[i].startDay) { // run always
+          if(currentTime <= alarms[i].endDay || alarms[i].endDay == 0) {
+            if(dow & alarms[i].weekdays) {
+              if(alarms[i].startTime > 0) {
+                if(seconds >= alarms[i].startTime && seconds <= alarms[i].startTime+10) {
+                  if(currentTime - alarms[i].lastActivate >= 20) {
+                    alarms[i].lastActivate = currentTime;
+                    runFunction = alarms[i].functionAtStart;
+                    continue;
+                  }
+                }
+              }
+              if(alarms[i].endTime > 0) {
+                if(seconds >= alarms[i].endTime && seconds <= alarms[i].endTime+10) {
+                  if(currentTime - alarms[i].lastDeactivate >= 20) {
+                    alarms[i].lastDeactivate = currentTime;
+                    runFunction = alarms[i].functionAtEnd;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    if(runFunction != 255) {
+      if(_onTickHandler != NULL) {
+        _onTickHandler(runFunction); // only run last active schedule
+      }
+    }
+  }
 
-  void free(AlarmID_t ID);                  // free the id to allow its reuse
+  void printTime() {
+    Serial.printf("%d-%d-%d %d:%d:%d %d\n", year(), month(), day(), hour(), minute(), second(), weekday());
+  }
 
-#ifndef USE_SPECIALIST_METHODS
-private:  // the following methods are for testing and are not documented as part of the standard library
-#endif
-  uint8_t count() const;                          // returns the number of allocated timers
-  time_t getNextTrigger() const;                  // returns the time of the next scheduled alarm
-  time_t getNextTrigger(AlarmID_t ID) const;      // returns the time of scheduled alarm
-  bool isAllocated(AlarmID_t ID) const;           // returns true if this id is allocated
-  bool isAlarm(AlarmID_t ID) const;               // returns true if id is for a time based alarm, false if its a timer or not allocated
+  // Get weekday bitmask (Monday = 2, Tuesday = 3, Wednesday = 4, etc.)
+  uint8_t checkWeekday() {
+    switch (weekday()) {
+      case 1: return 1; // Sunday
+      case 2: return 2; // Monday
+      case 3: return 4; // Tuesday
+      case 4: return 8; // Wednesday
+      case 5: return 16; // Thursday
+      case 6: return 32; // Friday
+      case 7: return 64; // Saturday
+    }
+    return 0; // Should never reach here
+  }
+
+
+  void setCallbackFunction(OnTick_t onTickHandler) {
+    _onTickHandler = onTickHandler;
+  }
+
+  bool scheduleChanged() {
+    if(updated) {
+      updated = false;
+      return true;
+    }
+    return false;
+  }
 };
 
-// extern ScheduleClass schedular;  // make an instance for the user
 
-/*==============================================================================
- * MACROS
- *============================================================================*/
-
-/* public */
-#define waitUntilThisSecond(_val_) waitForDigits( _val_, dtSecond)
-#define waitUntilThisMinute(_val_) waitForDigits( _val_, dtMinute)
-#define waitUntilThisHour(_val_)   waitForDigits( _val_, dtHour)
-#define waitUntilThisDay(_val_)    waitForDigits( _val_, dtDay)
-#define waitMinuteRollover()       waitForRollover(dtSecond)
-#define waitHourRollover()         waitForRollover(dtMinute)
-#define waitDayRollover()          waitForRollover(dtHour)
-
-
-#endif /* TimeAlarms_h */
+#endif

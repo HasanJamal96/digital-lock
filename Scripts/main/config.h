@@ -1,3 +1,6 @@
+#ifndef config_h
+#define config_h
+
 /*
   0 -> DL100
   1 -> DL1500 Timer
@@ -7,7 +10,7 @@
 #define LOCK_TYPE 1
 
 #define DEBUG     		true  // false will disable all debug logs
-#define DEBUG_RTC     true  // false will only disable RTC related logs 
+#define DEBUG_RTC     true  // false will only disable RTC related logs
 #define DEBUG_MEMORY  true  // false will only disable Memory related logs
 #define DEBUG_SERVER  true  // false will only disable Server related logs
 
@@ -57,7 +60,4 @@
 #endif
 
 
-#if (LOCK_TYPE > 1)
-  #define WEBSOCKET_IP    192.168.18.110
-  #define WEBSOCKET_PORT  80
 #endif

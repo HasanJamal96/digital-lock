@@ -83,19 +83,13 @@ void initServer() {
 
 
 void routes() {
-//  server.on("/assets/<filename>", HTTP_GET, [](AsyncWebServerRequest *request) {
-//    request->send(SPIFFS, request->url(), "text/javascript");
-//  });
-//  
-//  server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
-
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send_P(200, "text/html", HTML);
   });
-  server.on("/assets/index-7edf4032.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/assets/index-665a42a4.css", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send_P(200, "text/css", CSS);
   });
-  server.on("/assets/index-d58f8346.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/assets/index-4712f62b.js", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send_P(200, "text/javascript", JS);
   });
   server.on("/digi-lock-ico.svg", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -140,6 +134,7 @@ void routes() {
       rec += (char)data[i];
     DeserializationError error = deserializeJson(newUser, rec);
     if(error) {
+      Serial.println(error.f_str());
       request->send(200, "application/json", JSON_PARSE_ERROR);
       return;
     }
@@ -147,7 +142,7 @@ void routes() {
     if(updatesByServer())
       request->send(200, "application/json", successMsg);
     else
-      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"unable to add new user\"}");
+      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"Unable to add new user\"}");
   });
   server.on("/delete-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
     String rec = "";
@@ -162,7 +157,7 @@ void routes() {
     if(updatesByServer())
       request->send(200, "application/json", successMsg);
     else
-      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"user not found\"}");
+      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"User not found\"}");
   });
   server.on("/update-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
     String rec = "";
@@ -177,7 +172,7 @@ void routes() {
     if(updatesByServer())
       request->send(200, "application/json", successMsg);
     else
-      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"user not found\"}");
+      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"User not found\"}");
   });
   server.on("/change-state",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
     String rec = "";
@@ -202,28 +197,9 @@ void routes() {
       request->send(200, "application/json", successMsg);
     }
     else {
-      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"invalid state\"}");
+      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"Invalid state\"}");
     }
   });
-  #if (LOCK_TYPE > 0)
-    server.on("/set-time",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
-    String rec = "";
-    for(int i=0; i<len; i++)
-      rec += (char)data[i];
-    DynamicJsonDocument serverData(50);
-    DeserializationError error = deserializeJson(serverData, rec);
-    if(error) {
-      request->send(200, "application/json", JSON_PARSE_ERROR);
-      return;
-    }
-    const uint64_t unixTime = serverData["millis"];
-    
-    if(rtc.setRtcTime(unixTime/1000))
-      request->send(200, "application/json", successMsg);
-    else
-      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"RTC not working\"}");
-    });
-  #endif
   server.on("/get-state", HTTP_GET, [](AsyncWebServerRequest *request) {
     char msg[50];
     strcpy(msg, "{\"success\":\"1\",\"s\":\"");
@@ -243,6 +219,97 @@ void routes() {
     
 
   });
+#if (LOCK_TYPE > 0)
+    server.on("/set-time",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
+    String rec = "";
+    for(int i=0; i<len; i++)
+      rec += (char)data[i];
+    DynamicJsonDocument serverData(100);
+    DeserializationError error = deserializeJson(serverData, rec);
+    if(error) {
+      request->send(200, "application/json", JSON_PARSE_ERROR);
+      return;
+    }
+    const uint64_t unixTime = serverData["millis"];
+    const float tz = serverData["tz"];
+    uint32_t seconds = tz * 3600;
+    uint32_t timeToSet = (unixTime/1000) - (seconds);
+    if(rtc.setRtcTime(timeToSet))
+      request->send(200, "application/json", successMsg);
+    else
+      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"RTC not working\"}");
+    });
+    server.on("/get-relay-schedules", HTTP_GET, [](AsyncWebServerRequest *request) {
+      char buffer[1200];
+      schedule.getAll(buffer);
+      request->send(200, "application/json", buffer);
+    });
+    server.on("/add-relay-schedule",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
+      String rec = "";
+      for(int i=0; i<len; i++)
+        rec += (char)data[i];
+      DynamicJsonDocument doc(256);
+      DeserializationError error = deserializeJson(doc, rec);
+      if(error) {
+        request->send(200, "application/json", JSON_PARSE_ERROR);
+        return;
+      }
+      const char    *n = doc["n"];
+      unsigned long sd = doc["sd"];
+      unsigned long ed = doc["ed"];
+      unsigned long st = doc["st"];
+      unsigned long et = doc["et"];
+      uint8_t wd       = doc["wd"];
+      uint8_t sf = doc["sf"];
+      uint8_t ef = doc["ef"];
+      if(schedule.add(n, sd, ed, st, et, wd, sf, ef))
+        request->send(200, "application/json", successMsg);
+      else
+        request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"Not enough space\"}");
+    });
+    server.on("/delete-relay-schedule",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
+      String rec = "";
+      for(int i=0; i<len; i++)
+        rec += (char)data[i];
+      DynamicJsonDocument doc(50);
+      DeserializationError error = deserializeJson(doc, rec);
+      if(error) {
+        request->send(200, "application/json", JSON_PARSE_ERROR);
+        return;
+      }
+      uint8_t id = doc["p"];
+      if(schedule.remove(id))
+        request->send(200, "application/json", successMsg);
+      else
+        request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"Invalid id\"}");
+    });
+
+    server.on("/update-relay-schedule",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
+      String rec = "";
+      for(int i=0; i<len; i++)
+        rec += (char)data[i];
+      DynamicJsonDocument doc(256);
+      DeserializationError error = deserializeJson(doc, rec);
+      if(error) {
+        request->send(200, "application/json", JSON_PARSE_ERROR);
+        return;
+      }
+      uint8_t       id = doc["i"];
+      const char    *n = doc["n"];
+      unsigned long sd = doc["sd"];
+      unsigned long ed = doc["ed"];
+      unsigned long st = doc["st"];
+      unsigned long et = doc["et"];
+      uint8_t       wd = doc["wd"];
+      unsigned long sf = doc["sf"];
+      unsigned long ef = doc["ef"];
+      if(schedule.update(id, n, sd, ed, st, et, wd, sf, ef))
+        request->send(200, "application/json", successMsg);
+      else
+        request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"Invalid id\"}");
+    });
+#endif
+  
   server.onNotFound([](AsyncWebServerRequest *request) {
     request->send(404);
   });

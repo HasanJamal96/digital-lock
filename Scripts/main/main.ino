@@ -15,9 +15,9 @@
 
 #include <ArduinoJson.h>
 
-StaticJsonDocument<8192> usersInfo;
-StaticJsonDocument<512> systemInfo;
-StaticJsonDocument<256> newUser;
+ StaticJsonDocument<8192> usersInfo;
+ StaticJsonDocument<512> systemInfo;
+ StaticJsonDocument<512> newUser;
 
 
 
@@ -47,9 +47,9 @@ Keypad keypad      (makeKeymap(keys), KEYPAD_R_PINS, KEYPAD_C_PINS, ROWS, COLS);
 #if (LOCK_TYPE > 0) // For other than DL100
   #include "schedule.h"
   #include "rtc.h"
-  
+
   MyRtc         rtc;
-  ScheduleClass schedular;
+  ScheduleManager schedule;
 #endif
 
 
@@ -160,8 +160,38 @@ void populatePasscode(char k) {
     "a" : "number of times code used", -> uint16_t
     "ma": "maximum number of time allowed to use code", -> uin16_t
     "s" : "guest user", -> 0,1
-    "e" : "time in seconds" -> unsigned long 
+    "e" : "time in seconds" -> unsigned long
   }
+
+  // adding guest user
+  {
+    "n" : "user's name 19 characters max", -> string
+    "p" : "user's password 6 characters max", -> string
+    "f" : "Relay function", -> uint8_t
+    "o" : "Momentary on time in seconds ", -> uint32_t
+    "l" : "limited use", -> bool
+    "a" : "number of times code used", -> uint16_t
+    "ma": "maximum number of time allowed to use code", -> uin16_t
+    "s" : "guest user", -> 0,1
+    "sd" : "start date" -> unsigned long, value cannot be zero
+    "ed" : "end date" -> unsigned long, value can be zero (no expiry)
+    "st" : "start time in seconds 24-hours" -> unsigned long
+    "et" : "end time in seconds 24-hours" -> unsigned long
+    "wd" : "weekdays " -> uint8_t each bit from right to left is week day startting from sunday example (Monday, Wednesday, Friday) = 00101010
+  }
+
+  // Relay Schedules
+
+  {
+    "sd" : "start date" -> unsigned long, value cannot be zero
+    "ed" : "end date" -> unsigned long, value can be zero (no expiry)
+    "st" : "start time in seconds 24-hours" -> unsigned long
+    "et" : "end time in seconds 24-hours" -> unsigned long
+    "wd" : "weekdays " -> uint8_t each bit from right to left is week day startting from sunday example (Monday, Wednesday, Friday) = 00101010
+    "sf" : "relay function at start time"
+    "ef" : "relay function at end time"
+  }
+
 */
 
 void setDefaultNewUser() {
@@ -188,7 +218,7 @@ void populateSystemInfo() {
   const bool     lo = systemInfo["lo"];
   const bool     sm = systemInfo["sm"];
   const char    *ac = systemInfo["ac"];
-  
+
   strcpy(deviceName, dn);
   strcpy(apName, wn);
   strcpy(apPass, wp);
@@ -222,8 +252,6 @@ bool checkUserAllowed(int id) {
     uint16_t count = 0;
     count = usersInfo[id]["a"].as<uint16_t>();
     if(count >= maxAllowed) {
-      removeUser(id);
-      memory.updateUsers();
       allowed = false;
     }
     else {
@@ -236,16 +264,36 @@ bool checkUserAllowed(int id) {
   #if (LOCK_TYPE > 0) // Condition for builds other than DL100
     const bool isScheduled = usersInfo[id]["s"];
     if(isScheduled) {
-      const unsigned long expiry = usersInfo[id]["e"];
-      if(millis() >= expiry) {
+      unsigned long sd = usersInfo[id]["sd"];
+      unsigned long ed = usersInfo[id]["ed"];
+      unsigned long st = usersInfo[id]["st"];
+      unsigned long et = usersInfo[id]["et"];
+      uint8_t       wd = usersInfo[id]["wd"];
+      if(!schedule.isUserInLimits(sd, ed, st, et, wd)) {
         allowed = false;
-        removeUser(id);
-        memory.updateUsers();
       }
     }
   #endif
   return allowed;
 }
+
+
+void runRelayFunction(uint8_t x) {
+  switch(x) {
+    case 2: // Latch
+      relay.on();
+      break;
+    case 3: // Unlatch
+      relay.off();
+      break;
+    case 4: // Toggle
+      relay.toggle();
+      break;
+    default:
+      break;
+  }
+}
+
 
 
 
@@ -328,28 +376,34 @@ void watchKeypad() {
                   #if (DEBUG == true)
                     Serial.printf("[Main] Passcode entered: %s\n", passcode);
                   #endif
-                  int id = matchUsers(passcode);
+                  int id = userExist(passcode, false);
                   if(id != -1) {
                     if(checkUserAllowed(id)) {
                       const uint8_t rFunc = usersInfo[id]["f"];
-                      switch(rFunc) { // check relay functions
-                        case 1: // Momentary
-                          uint16_t ot;
-                          ot = usersInfo[id]["o"].as<uint16_t>();
-                          relay.momentaryOnFor(ot);
-                          break;
-                        case 2: // Latch
-                          relay.on();
-                          break;
-                        case 3: // Unlatch
-                          relay.off();
-                          break;
-                        case 4: // Toggle
-                          relay.toggle();
-                          break;
-                        default:
-                          break;
+                      if(rFunc >= 0 && rFunc < 5) {
+                        valid_invalid_beeps(true);
+                        switch(rFunc) { // check relay functions
+                          case 1: // Momentary
+                            uint16_t ot;
+                            ot = usersInfo[id]["o"].as<uint16_t>();
+                            relay.momentaryOnFor(ot);
+                            break;
+                          case 2: // Latch
+                            relay.on();
+                            break;
+                          case 3: // Unlatch
+                            relay.off();
+                            break;
+                          case 4: // Toggle
+                            relay.toggle();
+                            break;
+                          default:
+                            break;
+                        }
                       }
+                    }
+                    else {
+                      valid_invalid_beeps(false);
                     }
                   }
                 }
@@ -362,6 +416,7 @@ void watchKeypad() {
               if(deviceState == RESET_PASSWORD) {
                 deviceState = NORMAL;
                 memory.resetProgramAccess();
+                strcpy(programAccessCode, PROG_PASSWORD);
                 buzzer.threeShortBeeps();
                 #if (DEBUG == true)
                   Serial.printf("[Main] Reset program access code to 000000\n");
@@ -551,60 +606,6 @@ void watchKeypad() {
   }
 }
 
-void removeUserBySchedule(char *code) {
-  int id = userExist(code, true);
-  if(id != -1) {
-    removeUser(id, false);
-    memory.updateUsers();
-    #if (DEBUG == true)
-      Serial.println("[Schedular] User removed");
-    #endif
-  }
-  #if (DEBUG == true)
-    else {
-        Serial.println("[Schedular] User not exist");
-    }
-  #endif
-}
-
-#if (LOCK_TYPE > 0)
-void addNewSchedule(const unsigned long ex, const char *code) {
-  if(schedular.triggerOnce(ex, removeUserBySchedule, code) == 255) {
-    #if (DEBUG == true)
-      Serial.println("[Schedular] Unable to add schedule");
-    #endif
-  }
-  #if (DEBUG == true)
-    else {
-      Serial.println("[Schedular] Schedule added");
-    }
-  #endif
-}
-void setSchedules() {
-  #if (DEBUG == true)
-    Serial.println("[Main] Setting schedules");
-  #endif
-  for(int i=0; i<registeredUsersCount; i++) {
-    const bool isScheduled = usersInfo[i]["s"];
-    if(isScheduled) {
-      const unsigned long expiry = usersInfo[i]["e"];
-      if(now() >= expiry) { // remove user if time peroid is already passed
-        removeUser(i, false);
-        memory.updateUsers();
-      }
-      else {
-        const char *co = usersInfo[i]["p"];
-        addNewSchedule(expiry, co);
-      }
-    }
-  }
-  
-  #if (DEBUG == true)
-    Serial.println("[Main] Schedules set");
-  #endif
-}
-#endif
-
 
 void setup() {
   #if (DEBUG == true)
@@ -614,7 +615,7 @@ void setup() {
 
   exitLed.init();
   exitInput.begin();
-  
+
   buzzer.init();
   keypadLed.init();
   relay.begin();
@@ -623,22 +624,23 @@ void setup() {
   memory.loadSystemInfo();
   memory.loadUsers();
   turnBacklight(true);
-  populateSystemInfo(); 
+  populateSystemInfo();
 
   registeredUsersCount = usersInfo.size();
-  
+
   #if (LOCK_TYPE > 0) // Condition for builds other than DL100
     rtc.init();
-    setSchedules();
+    memory.loadRealySchedule(&schedule);
+    schedule.setCallbackFunction(runRelayFunction);
   #endif
-  
+
   // Server initialization
   initServer();
   startServer();
 
   registeredUsersCount = usersInfo.size();
-  
-  
+
+
   #if (DEBUG == true)
     Serial.println("[Main] Setup complete");
   #endif
@@ -777,6 +779,15 @@ bool updatesByServer() {
 }
 
 
+
+void relayFunctionsForServer(uint8_t x) {
+  if(x == 0)
+    runRelayFunction(3);
+  else
+    runRelayFunction(2);
+}
+
+
 void loop() {
   watchKeypad();
   serverLoop();
@@ -785,7 +796,12 @@ void loop() {
     relay.loop();
   }
   #if(LOCK_TYPE > 0)
-    schedular.delay(100); // check all schedules
+    schedule.service(); // check all schedules
+    if(schedule.scheduleChanged()) {
+      char buf[1024];
+      schedule.getAll(buf);
+      memory.saveRelaySchedule(buf);
+    }
   #endif
 
   exitInput.read();

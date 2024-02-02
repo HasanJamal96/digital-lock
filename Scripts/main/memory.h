@@ -1,6 +1,7 @@
 #include "Arduino.h"
 #include "config.h"
 #include "SPIFFS.h"
+#include "schedule.h"
 
 
 const char *userFilename = "/users.json";
@@ -114,6 +115,7 @@ class Memory {
         #endif
         setDefaultsSettings();
       }
+      systemInfo["t"] = LOCK_TYPE;
     }
     
     
@@ -134,6 +136,7 @@ class Memory {
       systemInfo["lo"] = LOCKOUT;
       systemInfo["sm"] = SLEEP_MODE;
       systemInfo["ac"] = PROG_PASSWORD;
+      systemInfo["t"]  = LOCK_TYPE;
       updateSystemInfo();
     }
     
@@ -143,5 +146,47 @@ class Memory {
       #endif
       systemInfo["ac"] = PROG_PASSWORD;
       updateSystemInfo();
+    }
+
+
+    void saveRelaySchedule(char * buffer) {
+      File file = SPIFFS.open("/relayFunctions.json", "w");
+      if(file) {
+        file.print(buffer);
+        file.close();
+        #if(DEBUG == true && DEBUG_MEMORY == true)
+          Serial.printf("[SPIFFS] Relay schedule saved\n");
+        #endif
+      }
+    }
+
+    void loadRealySchedule(ScheduleManager *schedule) {
+      #if(DEBUG == true && DEBUG_MEMORY == true)
+        Serial.println("[SPIFFS] Loading relay schedule.");
+      #endif
+      File file = SPIFFS.open("/relayFunctions.json");
+      if(file) {
+        DynamicJsonDocument doc(2048);
+        DeserializationError error = deserializeJson(doc, file);
+        if(error) {
+          #if(DEBUG == true && DEBUG_MEMORY == true)
+            Serial.println("[SPIFFS] Error parsing relay schedule.");
+          #endif
+          return;
+        }
+        int len = doc.size();
+        for (uint8_t i=0; i<len; i++) {
+          const char    *n = doc[i]["n"];
+          unsigned long sd = doc[i]["sd"];
+          unsigned long ed = doc[i]["ed"];
+          unsigned long st = doc[i]["st"];
+          unsigned long et = doc[i]["et"];
+          uint8_t wd       = doc[i]["wd"];
+          uint8_t sf       = doc[i]["sf"];
+          uint8_t ef       = doc[i]["ef"];
+          schedule->add(n, sd, ed, st, et, wd, sf, ef, false);
+        }
+        doc.clear();
+      }
     }
 };

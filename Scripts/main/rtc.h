@@ -1,4 +1,6 @@
+
 #include <RTClib.h> 
+#include <TimeLib.h> 
 
 
 class MyRtc {
@@ -54,6 +56,9 @@ class MyRtc {
       if(_working) {
         _forceSync = true;
         rtc.adjust(DateTime(t));
+        DateTime now = rtc.now();
+        setTime(now.unixtime());
+        printTime();
         return true;
       }
       else  {

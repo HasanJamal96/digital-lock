@@ -50,8 +50,10 @@ class Memory {
           DeserializationError error = deserializeJson(usersInfo, file);
           if(error) {
             #if(DEBUG == true && DEBUG_MEMORY == true)
-              Serial.println("[SPIFFS] Failed to load users info");
+              Serial.print("[SPIFFS] Failed to load users info: ");
+              Serial.println(error.f_str());
             #endif
+            usersInfo.clear();
           }
           else {
             #if(DEBUG == true && DEBUG_MEMORY == true)
@@ -99,6 +101,7 @@ class Memory {
             #if(DEBUG == true && DEBUG_MEMORY == true)
               Serial.println("[SPIFFS] Failed to load system information.");
             #endif
+            setDefaultsSettings();
           }
         }
         else {
@@ -155,7 +158,7 @@ class Memory {
         file.print(buffer);
         file.close();
         #if(DEBUG == true && DEBUG_MEMORY == true)
-          Serial.printf("[SPIFFS] Relay schedule saved\n");
+          Serial.printf("[SPIFFS] Relay schedule saved %s\n", buffer);
         #endif
       }
     }
@@ -170,12 +173,14 @@ class Memory {
         DeserializationError error = deserializeJson(doc, file);
         if(error) {
           #if(DEBUG == true && DEBUG_MEMORY == true)
-            Serial.println("[SPIFFS] Error parsing relay schedule.");
+            Serial.print("[SPIFFS] Error parsing relay schedule: ");
+            Serial.println(error.f_str());
           #endif
           return;
         }
         int len = doc.size();
         for (uint8_t i=0; i<len; i++) {
+          const uint8_t index = doc[i]["id"];
           const char    *n = doc[i]["n"];
           unsigned long sd = doc[i]["sd"];
           unsigned long ed = doc[i]["ed"];
@@ -184,9 +189,50 @@ class Memory {
           uint8_t wd       = doc[i]["wd"];
           uint8_t sf       = doc[i]["sf"];
           uint8_t ef       = doc[i]["ef"];
-          schedule->add(n, sd, ed, st, et, wd, sf, ef, false);
+          schedule->addAtSpecificIndex(index, n, sd, ed, st, et, wd, sf, ef);
         }
         doc.clear();
       }
+    }
+
+    void loadHistory() {
+      #if(DEBUG == true && DEBUG_MEMORY == true)
+        Serial.println("[SPIFFS] Loading history.");
+      #endif
+
+      File file = SPIFFS.open("/history.json");
+      if(file) {
+        DeserializationError error = deserializeJson(history, file);
+        if(error) {
+          #if(DEBUG == true && DEBUG_MEMORY == true)
+            Serial.print("[SPIFFS] Error parsing history data: ");
+            Serial.println(error.f_str());
+          #endif
+          history.clear();
+          return;
+        }
+        #if(DEBUG == true && DEBUG_MEMORY == true)
+          Serial.println("[SPIFFS] History loaded.");
+        #endif
+        return;
+      }
+      #if(DEBUG == true && DEBUG_MEMORY == true)
+        Serial.println("[SPIFFS] Error Loading history.");
+      #endif
+    }
+
+    void updateHistory() {
+      File file = SPIFFS.open("/history.json", FILE_WRITE);
+      if(file) {
+        serializeJson(history, file);
+        file.close();
+        #if(DEBUG == true && DEBUG_MEMORY == true)
+          Serial.println("[SPIFFS] History updated.");
+        #endif
+        return;
+      }
+      #if(DEBUG == true && DEBUG_MEMORY == true)
+        Serial.println("[SPIFFS] Failed to updat history.");
+      #endif
     }
 };

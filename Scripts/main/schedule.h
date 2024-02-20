@@ -6,11 +6,11 @@
 #define MAX_ALARMS 10
 
 
-typedef void (*OnTick_t)(uint8_t relayFunction);
+typedef void (*OnTick_t)(uint8_t relayFunction, const char *name, uint8_t id);
 
 struct Alarm {
   uint8_t id = 255;
-  char name[10];
+  char name[20];
   time_t startDay;
   time_t endDay;
   time_t startTime;
@@ -35,6 +35,8 @@ private:
   time_t seconds;
   uint8_t dow;
   bool updated = false;
+  uint32_t lastCheck = 0;
+  const uint16_t CHECK_AFTER = 1000;
 
   uint8_t getFreeIndex() {
     for(uint8_t i=0; i<MAX_ALARMS; i++) {
@@ -50,6 +52,23 @@ private:
   }
 
 public:
+  void addAtSpecificIndex(const uint8_t index, const char *name, time_t startDay, time_t endDay, time_t startTime, time_t endTime, uint8_t w_days, uint8_t functionAtStart, uint8_t functionAtEnd) {
+    if (numAlarms < MAX_ALARMS) {
+      if(strlen(name) > 0)
+        strcpy(alarms[index].name, name);
+      alarms[index].startDay = startDay;
+      alarms[index].endDay = endDay;
+      alarms[index].startTime = startTime;
+      alarms[index].endTime = endTime;
+      alarms[index].weekdays = w_days;
+      alarms[index].id = index;
+      alarms[index].functionAtStart = functionAtStart;
+      alarms[index].functionAtEnd = functionAtEnd;
+      numAlarms++;
+    }
+  }
+
+
   bool add(const char *name, time_t startDay, time_t endDay, time_t startTime, time_t endTime, uint8_t w_days, uint8_t functionAtStart, uint8_t functionAtEnd, bool doSave = true) {
     if (numAlarms < MAX_ALARMS) {
       uint8_t index = getFreeIndex();
@@ -86,10 +105,21 @@ public:
       alarms[id].functionAtStart = functionAtStart;
       alarms[id].functionAtEnd = functionAtEnd;
       updated = true;
+      Alarm a = alarms[id];
+      Serial.printf("{\"id\":%d,\"n\":\"%s\",\"sd\":%lu,\"ed\":%lu,\"st\":%lu,\"et\":%lu,\"wd\":%d,\"sf\":%d,\"ef\":%d},", a.id, a.name, a.startDay, a.endDay, a.startTime, a.endTime, a.weekdays, a.functionAtStart, a.functionAtEnd);
       return true;
     }
     else {
       return false;
+    }
+  }
+
+  void getSpecificSchedule(char *buf, uint8_t index) {
+    if(alarms[index].id != 255) {
+      Alarm a = alarms[index];
+      char localBuf[100];
+      sprintf(localBuf, "{\"sd\":%lu,\"ed\":%lu,\"st\":%lu,\"et\":%lu,\"wd\":%d,\"sf\":%d,\"ef\":%d}", a.startDay, a.endDay, a.startTime, a.endTime, a.weekdays, a.functionAtStart, a.functionAtEnd);
+      strcpy(buf, localBuf);
     }
   }
 
@@ -134,10 +164,16 @@ public:
 
   bool isUserInLimits(time_t startDay, time_t endDay, time_t startTime, time_t endTime, uint8_t w_days) {
     updateCurrentTimeVariables();
-    if(currentTime >= startDay) { // run always
+    if(currentTime >= startDay && startDay > 0) { // run always
+      Serial.println("Start in");
       if(currentTime <= endDay || endDay == 0) {
+        Serial.println("End in");
+        Serial.println(dow, BIN);
+        Serial.println(w_days, BIN);
         if(dow & w_days) {
-          if(seconds >= startTime && seconds <= endTime) {
+          Serial.println("Weekdays in");
+          if(seconds >= startTime && seconds < endTime) {
+            Serial.println("Seconds in");
             return true;
           }
         }
@@ -147,8 +183,12 @@ public:
   }
 
   void service() {
+    if(millis() - lastCheck < CHECK_AFTER) {
+      return;
+    }
     updateCurrentTimeVariables();
     uint8_t runFunction = 255; // 255 is used as invalid function
+    uint8_t ind = 255;
     for(uint8_t i=0; i<MAX_ALARMS; i++) {
       if(alarms[i].id != 255) {
         if(currentTime >= alarms[i].startDay) { // run always
@@ -159,6 +199,7 @@ public:
                   if(currentTime - alarms[i].lastActivate >= 20) {
                     alarms[i].lastActivate = currentTime;
                     runFunction = alarms[i].functionAtStart;
+                    ind = i;
                     continue;
                   }
                 }
@@ -168,6 +209,7 @@ public:
                   if(currentTime - alarms[i].lastDeactivate >= 20) {
                     alarms[i].lastDeactivate = currentTime;
                     runFunction = alarms[i].functionAtEnd;
+                    ind = i;
                   }
                 }
               }
@@ -178,9 +220,10 @@ public:
     }
     if(runFunction != 255) {
       if(_onTickHandler != NULL) {
-        _onTickHandler(runFunction); // only run last active schedule
+        _onTickHandler(runFunction, alarms[ind].name, ind); // only run last active schedules
       }
     }
+    lastCheck = millis();
   }
 
   void printTime() {

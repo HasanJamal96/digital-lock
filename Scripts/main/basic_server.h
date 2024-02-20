@@ -71,9 +71,7 @@ void initServer() {
   #endif
   
   WiFi.mode(WIFI_MODE_APSTA);
-  // WiFi.begin("EBMACS-2.4GHz", "ebmacs1234567890");
-  // delay(6000);
-  // Serial.println(WiFi.localIP());
+  WiFi.begin("EBMACS-2.4GHz", "ebmacs1234567890");
   WiFi.onEvent(apConnectionCallback);
   
   #if (DEBUG == true && DEBUG_SERVER == true)
@@ -86,10 +84,10 @@ void routes() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send_P(200, "text/html", HTML);
   });
-  server.on("/assets/index-665a42a4.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/assets/index-4f224c84.css", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send_P(200, "text/css", CSS);
   });
-  server.on("/assets/index-4712f62b.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/assets/index-7778f13f.js", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send_P(200, "text/javascript", JS);
   });
   server.on("/digi-lock-ico.svg", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -178,23 +176,20 @@ void routes() {
     String rec = "";
     for(int i=0; i<len; i++)
       rec += (char)data[i];
-    DynamicJsonDocument serverData(50);
-    DeserializationError error = deserializeJson(serverData, rec);
+    DynamicJsonDocument doc(50);
+    DeserializationError error = deserializeJson(doc, rec);
     if(error) {
       request->send(200, "application/json", JSON_PARSE_ERROR);
       return;
     }
-    const int x = serverData["s"];
-    if(x < 2) {
-      switch(x) {
-        case 0: // off
-          relay.off();
-          break;
-        case 1: // on
-          relay.on();
-          break;
+    const int x = doc["s"];
+    if(x <= R_CLOSE) {
+      if(relay.setState(x)) {
+        request->send(200, "application/json", successMsg);
       }
-      request->send(200, "application/json", successMsg);
+      else {
+        request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"Invalid state\"}");
+      }
     }
     else {
       request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"Invalid state\"}");
@@ -219,25 +214,40 @@ void routes() {
     
 
   });
+  server.on("/get-history", HTTP_GET, [](AsyncWebServerRequest *request) {
+    #if (DEBUG == true && DEBUG_SERVER == true)
+      Serial.println("[Server] Sending history");
+    #endif
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    serializeJson(history, *response);
+    request->send(response);
+  });
 #if (LOCK_TYPE > 0)
     server.on("/set-time",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
     String rec = "";
     for(int i=0; i<len; i++)
       rec += (char)data[i];
-    DynamicJsonDocument serverData(100);
-    DeserializationError error = deserializeJson(serverData, rec);
+    DynamicJsonDocument doc(100);
+    DeserializationError error = deserializeJson(doc, rec);
     if(error) {
       request->send(200, "application/json", JSON_PARSE_ERROR);
       return;
     }
-    const uint64_t unixTime = serverData["millis"];
-    const float tz = serverData["tz"];
+    const uint64_t unixTime = doc["millis"];
+    const float tz = doc["tz"];
     uint32_t seconds = tz * 3600;
     uint32_t timeToSet = (unixTime/1000) - (seconds);
     if(rtc.setRtcTime(timeToSet))
       request->send(200, "application/json", successMsg);
     else
       request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"RTC not working\"}");
+    });
+    server.on("/get-time", HTTP_GET, [](AsyncWebServerRequest *request) {
+      DynamicJsonDocument doc(50);
+      doc["m"] = now();
+      AsyncResponseStream *response = request->beginResponseStream("application/json");
+      serializeJson(doc, *response);
+      request->send(response);
     });
     server.on("/get-relay-schedules", HTTP_GET, [](AsyncWebServerRequest *request) {
       char buffer[1200];
@@ -262,6 +272,9 @@ void routes() {
       uint8_t wd       = doc["wd"];
       uint8_t sf = doc["sf"];
       uint8_t ef = doc["ef"];
+
+      sd = sd + 61200;
+      ed = ed + 61200;
       if(schedule.add(n, sd, ed, st, et, wd, sf, ef))
         request->send(200, "application/json", successMsg);
       else
@@ -303,6 +316,8 @@ void routes() {
       uint8_t       wd = doc["wd"];
       unsigned long sf = doc["sf"];
       unsigned long ef = doc["ef"];
+      sd = sd + 61200;
+      ed = ed + 61200;
       if(schedule.update(id, n, sd, ed, st, et, wd, sf, ef))
         request->send(200, "application/json", successMsg);
       else

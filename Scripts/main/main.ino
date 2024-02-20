@@ -18,10 +18,21 @@
  StaticJsonDocument<8192> usersInfo;
  StaticJsonDocument<512> systemInfo;
  StaticJsonDocument<512> newUser;
+ StaticJsonDocument<2048> history;
+
+ /*
+  {
+    "t":"millis", -> time in millis
+    "n":"name" -> user name if user, schedule name if schedule,
+    "c":"1111", -> if user
+    "a":"0/1", -> access granted or not, 0 not granted, 1 granted
+  }
+ */
 
 
 
 #include "config.h"
+#include "EEPROM.h"
 #include "variables.h"
 #include "buzzer.h"
 #include "leds.h"
@@ -60,6 +71,29 @@ Keypad keypad      (makeKeymap(keys), KEYPAD_R_PINS, KEYPAD_C_PINS, ROWS, COLS);
 #endif
 
 
+void addHistory(const char *name, char *code, const uint8_t allowed) {
+  uint8_t len = history.size();
+  if(len > MAX_HISTORY) {
+    history.remove(0);
+  }
+
+  DynamicJsonDocument doc(256);
+  doc["t"] = now();
+  doc["n"] = name;
+  doc["p"] = code;
+  if(allowed)
+    doc["a"] = 1;
+  else
+    doc["a"] = 0;
+  
+  history.add(doc);
+  // #if(DEBUG == true)
+  //   serializeJson(history, Serial);
+  //   Serial.println();
+  // #endif
+  history.garbageCollect();
+  memory.updateHistory();
+}
 
 
 void valid_invalid_beeps(bool valid) {
@@ -208,6 +242,12 @@ void setDefaultNewUser() {
   #endif
 }
 
+void copyData(char *var1, const char *var2) {
+  if(strlen(var2) > 0) {
+    strcpy(var1, var2);
+  }
+}
+
 
 
 void populateSystemInfo() {
@@ -219,9 +259,9 @@ void populateSystemInfo() {
   const bool     sm = systemInfo["sm"];
   const char    *ac = systemInfo["ac"];
 
-  strcpy(deviceName, dn);
-  strcpy(apName, wn);
-  strcpy(apPass, wp);
+  copyData(deviceName, dn);
+  copyData(apName, wn);
+  copyData(apPass, wp);
   maxPasscodeLength = cl;
   lockOut = lo;
   sleepMode = sm;
@@ -278,7 +318,12 @@ bool checkUserAllowed(int id) {
 }
 
 
-void runRelayFunction(uint8_t x) {
+void runRelayFunction(uint8_t x, const char *name = "", uint8_t index = 0) {
+  char c[2];
+  sprintf(c, "%d", index);
+  EEPROM.write(ACTIVE_SCHEDULED_LOCATION, index);
+  EEPROM.commit();
+  addHistory(name, c, 1);
   switch(x) {
     case 2: // Latch
       relay.on();
@@ -286,18 +331,36 @@ void runRelayFunction(uint8_t x) {
     case 3: // Unlatch
       relay.off();
       break;
-    case 4: // Toggle
-      relay.toggle();
-      break;
+    // case 4: // Toggle
+    //   relay.toggle();
+    //   break;
     default:
       break;
   }
+}
+
+bool checkIfDeviceIsLocked() {
+  if(lockOut) {
+    if(lockTheDevice) {
+      if(millis() - lockOutStartTime < LOCK_WAIT_TIME) {
+        return true;
+      }
+      else {
+        consectiveInvalidEntries = 0;
+        lockTheDevice = false;
+      }
+    }
+  }
+  return false;
 }
 
 
 
 
 void watchKeypad() {
+  if(checkIfDeviceIsLocked()) {
+    return;
+  }
   if (keypad.getKeys()) {
     for(uint8_t i=0; i<LIST_MAX; i++) {
       if(keypad.key[i].stateChanged ) {
@@ -378,33 +441,58 @@ void watchKeypad() {
                   #endif
                   int id = userExist(passcode, false);
                   if(id != -1) {
+                    consectiveInvalidEntries = 0;
+                    const char *un = usersInfo[id]["n"];
                     if(checkUserAllowed(id)) {
                       const uint8_t rFunc = usersInfo[id]["f"];
                       if(rFunc >= 0 && rFunc < 5) {
-                        valid_invalid_beeps(true);
+                        bool granted = false;
                         switch(rFunc) { // check relay functions
                           case 1: // Momentary
                             uint16_t ot;
                             ot = usersInfo[id]["o"].as<uint16_t>();
-                            relay.momentaryOnFor(ot);
+                            granted = relay.setState(R_MOMENTARY, ot);
+                            // relay.momentaryOnFor(ot);
                             break;
                           case 2: // Latch
-                            relay.on();
+                            granted = relay.setState(R_LATCH);
+                            // relay.on();
                             break;
                           case 3: // Unlatch
-                            relay.off();
+                            granted = relay.setState(R_UNLATCH);
+                            // relay.off();
                             break;
                           case 4: // Toggle
-                            relay.toggle();
+                            granted = relay.setState(R_TOGGLE);
+                            // relay.toggle();
                             break;
                           default:
                             break;
                         }
+                        if(granted) {
+                          valid_invalid_beeps(true);
+                          addHistory(un, passcode, 1);
+                        }
+                        else {
+                          addHistory(un, passcode, 0);
+                          valid_invalid_beeps(false);
+                        }
                       }
                     }
                     else {
+                      addHistory(un, passcode, 0);
                       valid_invalid_beeps(false);
                     }
+                  }
+                  else {
+                    if(lockOut) {
+                      consectiveInvalidEntries += 1;
+                      if(consectiveInvalidEntries >= MAX_INVALID_ATTEMPTS) {
+                        lockTheDevice = true;
+                        lockOutStartTime = millis();
+                      }
+                    }
+                    valid_invalid_beeps(false);
                   }
                 }
               }
@@ -553,7 +641,7 @@ void watchKeypad() {
                       programStep = ADD_EDIT_DELETE;
                       #if (DEBUG == true)
                         Serial.println("[Main] User added");
-                        serializeJsonPretty(usersInfo, Serial);
+                        serializeJson(usersInfo, Serial);
                         Serial.println();
                       #endif
                       addUser = editUser = deleteUser = false;
@@ -623,6 +711,7 @@ void setup() {
   memory.init();
   memory.loadSystemInfo();
   memory.loadUsers();
+  memory.loadHistory();
   turnBacklight(true);
   populateSystemInfo();
 
@@ -632,6 +721,66 @@ void setup() {
     rtc.init();
     memory.loadRealySchedule(&schedule);
     schedule.setCallbackFunction(runRelayFunction);
+
+    EEPROM.begin(10);
+    uint8_t magicNumber = EEPROM.read(MAGIC_NUMBER_LOCATION);
+    if(magicNumber != MAGIC_NUMBER) {
+      EEPROM.write(MAGIC_NUMBER_LOCATION, MAGIC_NUMBER);
+      EEPROM.write(ACTIVE_SCHEDULED_LOCATION, 255);
+      EEPROM.commit();
+    }
+    else {
+      uint8_t savedScheduledIndex = EEPROM.read(ACTIVE_SCHEDULED_LOCATION);
+      if(savedScheduledIndex != INVALID_SCHEDULE) {
+        char buf[150];
+        schedule.getSpecificSchedule(buf, savedScheduledIndex);
+        if(strlen(buf) > 10) {
+          DynamicJsonDocument temp(200);
+          DeserializationError error = deserializeJson(temp, buf);
+          if(error) {
+            #if(DEBUG == true && DEBUG_MEMORY == true)
+              Serial.print("[SPIFFS] Failed to parse last activated realy schedule: ");
+              Serial.println(error.f_str());
+            #endif
+            EEPROM.write(ACTIVE_SCHEDULED_LOCATION, 255);
+            EEPROM.commit();
+          }
+          else {
+            delay(500);
+            unsigned long sd = temp["sd"];
+            unsigned long ed = temp["ed"];
+            unsigned long st = temp["st"];
+            unsigned long et = temp["et"];
+            uint8_t wd = temp["wd"];
+            uint8_t sf = temp["sf"];
+            if(schedule.isUserInLimits(sd, ed, st, et, wd)) {
+              #if (DEBUG == true)
+                Serial.println("[Main] Schedule is in limits");
+              #endif
+              switch(sf) {
+                case 2:
+                  relay.on();
+                  break;
+                case 3:
+                  relay.off();
+                  break;
+                default:
+                  EEPROM.write(ACTIVE_SCHEDULED_LOCATION, 255);
+                  EEPROM.commit();
+              }
+            }
+            else {
+              EEPROM.write(ACTIVE_SCHEDULED_LOCATION, 255);
+              EEPROM.commit();
+            }
+          }
+        }
+        else {
+          EEPROM.write(ACTIVE_SCHEDULED_LOCATION, 255);
+          EEPROM.commit();
+        }
+      }
+    }
   #endif
 
   // Server initialization
@@ -782,10 +931,21 @@ bool updatesByServer() {
 
 void relayFunctionsForServer(uint8_t x) {
   if(x == 0)
-    runRelayFunction(3);
+    relay.off();
   else
-    runRelayFunction(2);
+    relay.on();
 }
+
+#if (DEBUG == true)
+uint32_t lastHespPrint = 0;
+void printFreeRam() {
+  if(millis() - lastHespPrint >= 1000) {
+    Serial.print("Free Heap: ");
+    Serial.println(ESP.getFreeHeap());
+    lastHespPrint = millis();
+  }
+}
+#endif
 
 
 void loop() {
@@ -816,4 +976,7 @@ void loop() {
       relay.deactivateByExternalInput();
     }
   }
+  // #if(DEBUG == true)
+  //   printFreeRam();
+  // #endif 
 }

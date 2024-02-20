@@ -68,10 +68,11 @@ char keys[ROWS][COLS] = {
 };
 
 
-bool           backLightState = true;
+bool           backLightState = false;
 const uint8_t  BACKLIGHT_LED_LIN = 27;
 const uint16_t BACKLIGHT_OFF_AFTER = 30000; // time in milli seconds
 
+const uint8_t MAX_HISTORY = 10;
 
 bool enterState  = false;
 bool cancelState = false;
@@ -90,6 +91,7 @@ unsigned long lastKeyPressed = 0;
 
 unsigned long deviceStateChangeAt = 0;
 uint8_t consectiveInvalidEntries = 0;
+uint32_t lockOutStartTime = 0;
 
 
 
@@ -117,6 +119,7 @@ char programAccessCode[PROGRAM_ACCESS_CODE_LEN+1] = {};
 
 bool sleepMode = false;
 bool lockOut   = false;
+bool lockTheDevice = false;
 
 bool isClientConnected = false;
 

@@ -28,6 +28,15 @@
 // TOGGLE    = 4
 // SCHEDULED = 5
 
+const uint8_t R_NONE       = 0;
+const uint8_t R_MOMENTARY  = 1;
+const uint8_t R_LATCH      = 2;
+const uint8_t R_UNLATCH    = 3;
+const uint8_t R_TOGGLE     = 4;
+const uint8_t R_SCHEDULED  = 5;
+const uint8_t R_HOLD       = 6;
+const uint8_t R_OPEN       = 7;
+const uint8_t R_CLOSE      = 8;
 
 // Default values
 
@@ -47,6 +56,7 @@
 #define LOCKOUT           0           // 0-> Off, 1->On
 
 #define MAX_INVALID_ATTEMPTS  5
+#define LOCK_WAIT_TIME        30000 //  time in milli seconds
 
 #define MODE_RESET_BACK_TO_NORMAL_AFTER  240000 // time in milli seconds
 
@@ -58,6 +68,14 @@
 #else
   #define MAX_SUPPORTED_USERS  10000
 #endif
+#endif
 
 
+
+#if (LOCK_TYPE > 0)
+#define MAGIC_NUMBER  43
+#define MAGIC_NUMBER_LOCATION      1
+#define RELAY_STATUS_LOCATION      2
+#define ACTIVE_SCHEDULED_LOCATION  3
+#define INVALID_SCHEDULE          255
 #endif

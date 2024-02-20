@@ -3,7 +3,6 @@
 #define LED_ON  HIGH
 #define LED_OFF LOW
 
-
 class Relay {
   public:
     Relay(uint8_t rPin, uint8_t lPin) : _relayPin(rPin), _ledPin(lPin) {}
@@ -53,11 +52,55 @@ class Relay {
         on();
       }
     }
-    
+
+
+    void updateState(uint8_t stateToSet, uint16_t setOnTime = 0) {
+      if(stateToSet == R_HOLD || stateToSet == R_LATCH || stateToSet == R_OPEN) {
+        on();
+        rMode = stateToSet;
+      }
+      else if(stateToSet == R_UNLATCH || stateToSet == R_CLOSE) {
+        off();
+        rMode = stateToSet;
+      }
+      else if(stateToSet == R_MOMENTARY) {
+        momentaryOnFor(setOnTime);
+        rMode = R_MOMENTARY;
+      }
+      else if(stateToSet == R_TOGGLE) {
+        toggle();
+        rMode = R_TOGGLE;
+      }
+      if(EEPROM.read(ACTIVE_SCHEDULED_LOCATION) != 255) {
+        EEPROM.write(ACTIVE_SCHEDULED_LOCATION, 255);
+        EEPROM.commit();
+      }
+    }
+
+
+    bool setState(uint8_t stateToSet, uint16_t setOnTime = 0) {
+      if(_isExternalTriggerActivate)
+        return false;
+      if(stateToSet == R_OPEN || stateToSet == R_CLOSE || stateToSet == R_MOMENTARY || stateToSet == R_LATCH) {
+        if(rMode == R_HOLD || (rMode == R_TOGGLE && state)) {
+          return false;
+        }
+      }
+      updateState(stateToSet, setOnTime);
+      return true;
+    }
+
+
     bool status() {
       return state;
     }
-    
+
+
+    uint8_t getMode() {
+      return rMode;
+    }
+
+
     void loop() {
       if(_isExternalTriggerActivate)
         return;
@@ -69,9 +112,9 @@ class Relay {
     }
 
     void activateByExternalInput() {
-      on();
-      _isMomentaryPreviously = _momentary;
       _previousState = state;
+      _isMomentaryPreviously = _momentary;
+      on();
       _momentary = false;
       _isExternalTriggerActivate = true;
     }
@@ -99,4 +142,5 @@ class Relay {
     bool _previousState = false;
     bool _isMomentaryPreviously = false;
     bool _isExternalTriggerActivate = false;
+    uint8_t rMode = R_NONE;
 };

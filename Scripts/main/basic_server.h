@@ -11,11 +11,11 @@ DNSServer dnsServer;
 AsyncWebServer server(80);
 
 
-const char *JSON_PARSE_ERROR   = "{\"success\":\"0\",\"error\":\"unable to parse json\"}";
-const char *successMsg = "{\"success\":\"1\"}";
+const char *JSON_PARSE_ERROR   = "{\"success\":0,\"error\":\"unable to parse json\"}";
+const char *successMsg = "{\"success\":1}";
 
 void routes();
-bool updatesByServer();
+uint8_t updatesByServer();
 void relayFunctionsForServer(uint8_t func); // function's working defined in main.ino
 
 
@@ -72,6 +72,7 @@ void initServer() {
   
   WiFi.mode(WIFI_MODE_APSTA);
   WiFi.begin("EBMACS-2.4GHz", "ebmacs1234567890");
+//  WiFi.begin("Home", "home5910979");
   WiFi.onEvent(apConnectionCallback);
   
   #if (DEBUG == true && DEBUG_SERVER == true)
@@ -106,6 +107,7 @@ void routes() {
     #if (DEBUG == true && DEBUG_SERVER == true)
       Serial.println("[Server] Sending system info ");
     #endif
+    systemInfo["t"]  = LOCK_TYPE;
     AsyncResponseStream *response = request->beginResponseStream("application/json");
     serializeJson(systemInfo, *response);
     request->send(response);
@@ -140,7 +142,7 @@ void routes() {
     if(updatesByServer())
       request->send(200, "application/json", successMsg);
     else
-      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"Unable to add new user\"}");
+      request->send(200, "application/json", "{\"success\":0,\"error\":\"Unable to add new user\"}");
   });
   server.on("/delete-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
     String rec = "";
@@ -155,7 +157,7 @@ void routes() {
     if(updatesByServer())
       request->send(200, "application/json", successMsg);
     else
-      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"User not found\"}");
+      request->send(200, "application/json", "{\"success\":0,\"error\":\"User not found\"}");
   });
   server.on("/update-user",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
     String rec = "";
@@ -167,10 +169,13 @@ void routes() {
       return;
     }
     editByServer = true;
-    if(updatesByServer())
+    uint8_t x = updatesByServer();
+    if(x == 1)
       request->send(200, "application/json", successMsg);
+    else if(x == 2)
+      request->send(200, "application/json", "{\"success\":0,\"error\":\"New password assosiate with other user\"}");
     else
-      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"User not found\"}");
+      request->send(200, "application/json", "{\"success\":0,\"error\":\"User not found\"}");
   });
   server.on("/change-state",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
     String rec = "";
@@ -188,16 +193,16 @@ void routes() {
         request->send(200, "application/json", successMsg);
       }
       else {
-        request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"Invalid state\"}");
+        request->send(200, "application/json", "{\"success\":0,\"error\":\"Invalid state\"}");
       }
     }
     else {
-      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"Invalid state\"}");
+      request->send(200, "application/json", "{\"success\":0,\"error\":\"Invalid state\"}");
     }
   });
   server.on("/get-state", HTTP_GET, [](AsyncWebServerRequest *request) {
     char msg[50];
-    strcpy(msg, "{\"success\":\"1\",\"s\":\"");
+    strcpy(msg, "{\"success\":1,\"s\":\"");
     if(relay.status()) {
       strcat(msg, "1\",\"e\":\"");
     }
@@ -240,7 +245,7 @@ void routes() {
     if(rtc.setRtcTime(timeToSet))
       request->send(200, "application/json", successMsg);
     else
-      request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"RTC not working\"}");
+      request->send(200, "application/json", "{\"success\":0,\"error\":\"RTC not working\"}");
     });
     server.on("/get-time", HTTP_GET, [](AsyncWebServerRequest *request) {
       DynamicJsonDocument doc(50);
@@ -278,7 +283,7 @@ void routes() {
       if(schedule.add(n, sd, ed, st, et, wd, sf, ef))
         request->send(200, "application/json", successMsg);
       else
-        request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"Not enough space\"}");
+        request->send(200, "application/json", "{\"success\":0,\"error\":\"Not enough space\"}");
     });
     server.on("/delete-relay-schedule",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
       String rec = "";
@@ -294,7 +299,7 @@ void routes() {
       if(schedule.remove(id))
         request->send(200, "application/json", successMsg);
       else
-        request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"Invalid id\"}");
+        request->send(200, "application/json", "{\"success\":0,\"error\":\"Invalid id\"}");
     });
 
     server.on("/update-relay-schedule",HTTP_POST,[](AsyncWebServerRequest * request){},NULL,[](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
@@ -321,7 +326,7 @@ void routes() {
       if(schedule.update(id, n, sd, ed, st, et, wd, sf, ef))
         request->send(200, "application/json", successMsg);
       else
-        request->send(200, "application/json", "{\"success\":\"0\",\"error\":\"Invalid id\"}");
+        request->send(200, "application/json", "{\"success\":0,\"error\":\"Invalid id\"}");
     });
 #endif
   
@@ -342,7 +347,7 @@ void startServer() {
   DefaultHeaders::Instance().addHeader(F("Access-Control-Allow-Headers"), F("content-type"));
   server.begin();
   #if (DEBUG == true && DEBUG_SERVER == true)
-    Serial.println("[Server] Started");
+    Serial.printf("[Server] Started with SSID: %s, and password %s\n", apName, apPass);
   #endif
 }
 

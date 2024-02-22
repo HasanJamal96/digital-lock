@@ -56,7 +56,7 @@ const uint8_t R_CLOSE      = 8;
 #define LOCKOUT           0           // 0-> Off, 1->On
 
 #define MAX_INVALID_ATTEMPTS  5
-#define LOCK_WAIT_TIME        30000 //  time in milli seconds
+#define LOCK_WAIT_TIME        18000000 //  time in milli seconds (18000000 -> 5 minutes)
 
 #define MODE_RESET_BACK_TO_NORMAL_AFTER  240000 // time in milli seconds
 
@@ -73,7 +73,7 @@ const uint8_t R_CLOSE      = 8;
 
 
 #if (LOCK_TYPE > 0)
-#define MAGIC_NUMBER  43
+#define MAGIC_NUMBER  23
 #define MAGIC_NUMBER_LOCATION      1
 #define RELAY_STATUS_LOCATION      2
 #define ACTIVE_SCHEDULED_LOCATION  3

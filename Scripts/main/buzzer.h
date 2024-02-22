@@ -1,3 +1,6 @@
+#ifndef BUZZER_H
+#define BUZZER_H
+
 #include "Arduino.h"
 
 
@@ -92,3 +95,5 @@ class Buzzer {
     unsigned long _waitDuration = 0;
 
 };
+
+#endif

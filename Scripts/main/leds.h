@@ -1,5 +1,7 @@
-#include "Arduino.h"
+#ifndef LEDS_H
+#define LEDS_H
 
+#include "Arduino.h"
 
 class Led {
   public:
@@ -27,3 +29,5 @@ class Led {
     uint8_t _pin;
     bool _state = false;
 };
+
+#endif

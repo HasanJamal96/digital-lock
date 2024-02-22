@@ -1,5 +1,7 @@
-#include <Arduino.h>
+#ifndef BUTTON_H
+#define BUTTON_H
 
+#include <Arduino.h>
 
 class Button {
   public:
@@ -59,3 +61,5 @@ class Button {
     uint32_t m_time;        // time of current state (ms from millis)
     uint32_t m_lastChange;
 };
+
+#endif

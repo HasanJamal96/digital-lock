@@ -15,10 +15,10 @@
 
 #include <ArduinoJson.h>
 
- StaticJsonDocument<8192> usersInfo;
- StaticJsonDocument<512> systemInfo;
- StaticJsonDocument<512> newUser;
- StaticJsonDocument<2048> history;
+StaticJsonDocument<16384> usersInfo;
+StaticJsonDocument<512>   systemInfo;
+StaticJsonDocument<512>   newUser;
+StaticJsonDocument<2048> history;
 
  /*
   {
@@ -194,7 +194,8 @@ void populatePasscode(char k) {
     "a" : "number of times code used", -> uint16_t
     "ma": "maximum number of time allowed to use code", -> uin16_t
     "s" : "guest user", -> 0,1
-    "e" : "time in seconds" -> unsigned long
+    "e" : "time in seconds", -> unsigned long
+    "np" : "new password"
   }
 
   // adding guest user
@@ -867,41 +868,78 @@ void timedParameters() {
   }
 }
 
+void removeExtraKeys(bool limit, bool guest) {
+  if(!limit) {
+    newUser.remove("a");
+    newUser.remove("ma");
+  }
+  if(!guest) {
+    newUser.remove("sd");
+    newUser.remove("ed");
+    newUser.remove("st");
+    newUser.remove("et");
+    newUser.remove("wd");
+  }
+  newUser.remove("np");
+}
 
-bool updatesByServer() {
+
+uint8_t updatesByServer() {
   if(addByServer) {
     addByServer = false;
     char pas[7];
     strcpy(pas, newUser["p"]);
     int x = userExist(pas, true);
     if(x == -1) {
+      const bool li = newUser["l"];
+      const bool gu = newUser["s"];
+      removeExtraKeys(li, gu);
       usersInfo.add(newUser);
       registeredUsersCount++;
       buzzer.threeShortBeeps();
       memory.updateUsers();
-      return true;
+      return 1;
     }
     else {
-      return false;
+      return 0;
     }
   }
   else if(editByServer) {
     editByServer = false;
     char pas[7];
     strcpy(pas, newUser["p"]);
-    int x = userExist(pas, true);
+    int x = userExist(pas, true); // check is user exist
     if(x != -1) {
       const char *np = newUser["np"];
       newUser.remove("np");
-      usersInfo[x] = newUser;
-      usersInfo[x]["p"] = np;
-      buzzer.threeShortBeeps();
-      memory.updateUsers();
-      return true;
+      strcpy(pas, np);
+      int y = userExist(pas, true); // check if new password already exist
+      if(y == -1 || x == y) { // new password not exist
+        const bool li = newUser["l"];
+        const bool gu = newUser["s"];
+        removeExtraKeys(li, gu);
+        usersInfo[x] = newUser;
+        if(y == -1)
+          usersInfo[x]["p"] = np;
+        buzzer.threeShortBeeps();
+        memory.updateUsers();
+//        serializeJson(usersInfo, Serial);
+//        Serial.println();
+        return 1; 
+      }
+      else {
+        #if (DEBUG == true)
+          Serial.println("[Main] New password already exist");
+        #endif
+        return 2;
+      }
     }
-    else {
-      return false;
-    }
+    #if (DEBUG == true)
+      else {
+        Serial.println("[Main] User not exist");
+      }
+    #endif
+    return 0;
   }
   else if(deleteByServer) {
     deleteByServer = false;
@@ -912,19 +950,19 @@ bool updatesByServer() {
       registeredUsersCount--;
       removeUser(x);
       memory.updateUsers();
-      return true;
+      return 1;
     }
     else {
-      return false;
+      return 0;
     }
   }
   else if(systemByServer) {
     systemByServer = false;
     memory.updateSystemInfo();
     populateSystemInfo();
-    return true;
+    return 1;
   }
-  return false;
+  return 0;
 }
 
 
@@ -939,7 +977,7 @@ void relayFunctionsForServer(uint8_t x) {
 #if (DEBUG == true)
 uint32_t lastHespPrint = 0;
 void printFreeRam() {
-  if(millis() - lastHespPrint >= 1000) {
+  if(millis() - lastHespPrint >= 2000) {
     Serial.print("Free Heap: ");
     Serial.println(ESP.getFreeHeap());
     lastHespPrint = millis();
@@ -976,7 +1014,7 @@ void loop() {
       relay.deactivateByExternalInput();
     }
   }
-  // #if(DEBUG == true)
-  //   printFreeRam();
-  // #endif 
+//   #if(DEBUG == true)
+//     printFreeRam();
+//   #endif 
 }

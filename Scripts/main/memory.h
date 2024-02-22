@@ -1,3 +1,6 @@
+#ifndef MEMORY_H
+#define MEMORY_H
+
 #include "Arduino.h"
 #include "config.h"
 #include "SPIFFS.h"
@@ -236,3 +239,5 @@ class Memory {
       #endif
     }
 };
+
+#endif

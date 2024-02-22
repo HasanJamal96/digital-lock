@@ -1,3 +1,6 @@
+#ifndef RELAY_H
+#define RELAY_H
+
 #define RELAY_ON  LOW
 #define RELAY_OFF HIGH
 #define LED_ON  HIGH
@@ -144,3 +147,5 @@ class Relay {
     bool _isExternalTriggerActivate = false;
     uint8_t rMode = R_NONE;
 };
+
+#endif

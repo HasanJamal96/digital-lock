@@ -1,3 +1,6 @@
+#ifndef VARIABLES_H
+#define VARIABLES_H
+
 #include "config.h"
 
 typedef enum : uint8_t {
@@ -158,3 +161,5 @@ char wifiConncetionError[50];
 bool isWebsocketConnected = false;
 
 #endif
+
+#endif // VARIABLES_H

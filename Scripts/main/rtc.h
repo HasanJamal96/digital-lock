@@ -54,8 +54,9 @@ class MyRtc {
       rtc.adjust(DateTime(y, mon, d, h, m, s));
     }
 
-    bool setRtcTime(uint32_t t) {
+    bool setRtcTime(uint32_t t, float tz) {
       if(_working) {
+        _tz = tz;
         _forceSync = true;
         rtc.adjust(DateTime(t));
         DateTime now = rtc.now();
@@ -67,6 +68,14 @@ class MyRtc {
         return false;
       }
     }
+
+    bool getRTCState() {
+      return _working;
+    }
+
+    float getTZ() {
+      return _tz;
+    }
     
     
     // void loop() {
@@ -77,7 +86,7 @@ class MyRtc {
   
   private:
     RTC_DS1307 rtc;
-    
+    float _tz = 0;
     uint8_t _retries = 10;
     bool _working = false;
     bool _forceSync = true;

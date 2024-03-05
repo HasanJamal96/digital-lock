@@ -1,6 +1,8 @@
 #ifndef config_h
 #define config_h
 
+#define VERSION "0.2.1"
+
 /*
   0 -> DL100
   1 -> DL1500 Timer

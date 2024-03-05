@@ -19,10 +19,8 @@ uint8_t updatesByServer();
 void relayFunctionsForServer(uint8_t func); // function's working defined in main.ino
 
 
-
 void serverLoop() {
-  if(isClientConnected)
-    dnsServer.processNextRequest();
+  dnsServer.processNextRequest();
 }
 
 
@@ -49,20 +47,20 @@ public:
 
 
 
+#if(DEBUG == true && DEBUG_SERVER == true)
 void apConnectionCallback(WiFiEvent_t event) {
   if(event == ARDUINO_EVENT_WIFI_AP_STACONNECTED) {
-    #if(DEBUG == true && DEBUG_SERVER == true)
       Serial.printf("[Internet] AP client connected\n");
-    #endif
     isClientConnected = true;
   }
   else if(event == ARDUINO_EVENT_WIFI_AP_STADISCONNECTED) {
-    #if(DEBUG == true && DEBUG_SERVER == true)
+    // #if(DEBUG == true && DEBUG_SERVER == true)
       Serial.printf("[Internet] AP client disconnected\n");
-    #endif
+    // #endif
     isClientConnected = false;
   }
 }
+#endif
 
 
 void initServer() {
@@ -70,11 +68,14 @@ void initServer() {
     Serial.println("[Server] Initializing");
   #endif
   
-  WiFi.mode(WIFI_MODE_APSTA);
-  WiFi.begin("EBMACS-2.4GHz", "ebmacs1234567890");
-//  WiFi.begin("Home", "home5910979");
-  WiFi.onEvent(apConnectionCallback);
-  
+  // WiFi.mode(WIFI_MODE_APSTA);
+  WiFi.mode(WIFI_MODE_AP);
+  // WiFi.eraseAP();
+  // WiFi.begin("EBMACS-2.4GHz", "ebmacs1234567890");
+  #if(DEBUG == true && DEBUG_SERVER == true)
+    WiFi.onEvent(apConnectionCallback);
+  #endif
+
   #if (DEBUG == true && DEBUG_SERVER == true)
     Serial.println("[Server] Initialized");
   #endif
@@ -85,10 +86,10 @@ void routes() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send_P(200, "text/html", HTML);
   });
-  server.on("/assets/index-4f224c84.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/assets/index-0379c66a.css", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send_P(200, "text/css", CSS);
   });
-  server.on("/assets/index-7778f13f.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/assets/index-90cf9535.js", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send_P(200, "text/javascript", JS);
   });
   server.on("/digi-lock-ico.svg", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -242,17 +243,24 @@ void routes() {
     const float tz = doc["tz"];
     uint32_t seconds = tz * 3600;
     uint32_t timeToSet = (unixTime/1000) - (seconds);
-    if(rtc.setRtcTime(timeToSet))
+    if(rtc.setRtcTime(timeToSet, tz))
       request->send(200, "application/json", successMsg);
     else
       request->send(200, "application/json", "{\"success\":0,\"error\":\"RTC not working\"}");
     });
     server.on("/get-time", HTTP_GET, [](AsyncWebServerRequest *request) {
-      DynamicJsonDocument doc(50);
-      doc["m"] = now();
-      AsyncResponseStream *response = request->beginResponseStream("application/json");
-      serializeJson(doc, *response);
-      request->send(response);
+      if(rtc.getRTCState()) {
+        float tz = rtc.getTZ();
+
+        DynamicJsonDocument doc(50);
+        doc["m"] = now() + (3600 * tz);
+        AsyncResponseStream *response = request->beginResponseStream("application/json");
+        serializeJson(doc, *response);
+        request->send(response);
+      }
+      else {
+        request->send(200, "application/json", "{\"success\":0,\"error\":\"RTC not working\"}");
+      }
     });
     server.on("/get-relay-schedules", HTTP_GET, [](AsyncWebServerRequest *request) {
       char buffer[1200];
@@ -336,10 +344,11 @@ void routes() {
 }
 
 void startServer() {
-//  WiFi.disconnect();
+  WiFi.softAPdisconnect();
+  delay(500);
   WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
-  WiFi.softAP(apName, apPass);
-  delay(1000);
+  WiFi.softAP(apName, apPass, 1, 0, 1);
+  delay(500);
   dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
   dnsServer.start(53, "*", WiFi.softAPIP());
   server.addHandler(new CaptiveRequestHandler()).setFilter(ON_AP_FILTER);
